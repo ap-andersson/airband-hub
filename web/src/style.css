@@ -1,0 +1,511 @@
+/* Tokens. Dark is the default (a radio room); light follows the system setting. */
+:root {
+  color-scheme: dark;
+  --page: #1b2128;
+  --strip: #252d36;
+  --strip-edge: #34404b;
+  --ink: #e7ecef;
+  --ink-2: #a9b5bf;
+  --ink-3: #8593a0;
+  --on-air: #f0a830;
+  --on-air-ink: #1b2128;
+  --on-air-wash: #3a3324;
+  --signal: #3987e5;
+  --noise: #6a7885;
+  --squelch: #e7ecef;
+  --meter-track: #171d23;
+  --good: #0ca30c;
+  --bad: #d03b3b;
+  --focus: #8fc1ff;
+
+  --font-body: "Barlow", system-ui, sans-serif;
+  --font-display: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --page: #e6ebef;
+    --strip: #f7f9fa;
+    --strip-edge: #c9d2d9;
+    --ink: #18222b;
+    --ink-2: #4f5d69;
+    --ink-3: #6b7884;
+    --on-air: #f0a830;
+    --on-air-ink: #18222b;
+    --on-air-wash: #fdf0d5;
+    --signal: #2a78d6;
+    --noise: #aab5be;
+    --squelch: #18222b;
+    --meter-track: #e1e7ec;
+    --good: #0b7f0b;
+    --bad: #c03030;
+    --focus: #1c5cab;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.15;
+}
+
+h1 {
+  font-size: 2rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+}
+
+code {
+  font-size: 0.9em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.page {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.empty {
+  color: var(--ink-2);
+  margin: 0.75rem 0;
+}
+
+.secondary {
+  color: var(--ink-2);
+}
+
+/* Header */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--strip-edge);
+}
+
+.last-heard {
+  margin: 0.25rem 0 0;
+  color: var(--ink-2);
+}
+
+.last-heard strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.listen {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.listen-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: 600 1rem var(--font-body);
+  padding: 0.55rem 1.1rem 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--strip-edge);
+  background: var(--strip);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.listen-button svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}
+
+.listen-button.playing {
+  background: var(--on-air);
+  border-color: var(--on-air);
+  color: var(--on-air-ink);
+}
+
+.listen-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.stream-status,
+.health {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-2);
+}
+
+.status-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+
+.ok .status-icon circle {
+  fill: var(--good);
+}
+
+.bad .status-icon circle {
+  fill: var(--bad);
+}
+
+.status-icon path {
+  stroke: #fff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Frequency strips: the board */
+
+.board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.meter-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+.meter-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.meter-key i {
+  display: inline-block;
+}
+
+.key-signal {
+  width: 1rem;
+  height: 0.5rem;
+  border-radius: 0 4px 4px 0;
+  background: var(--signal);
+}
+
+.key-noise {
+  width: 1rem;
+  height: 0.5rem;
+  background: var(--noise);
+}
+
+.meter-scale {
+  font-variant-numeric: tabular-nums;
+}
+
+.key-squelch {
+  width: 2px;
+  height: 0.9rem;
+  background: var(--squelch);
+}
+
+.strips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 17rem;
+  align-items: stretch;
+  background: var(--strip);
+  border: 1px solid var(--strip-edge);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.strip-freq {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--strip-edge);
+  padding: 0.75rem 0.5rem;
+}
+
+.mhz {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.6rem;
+  letter-spacing: 0.01em;
+}
+
+.mhz-small {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.strip-main {
+  padding: 0.65rem 1rem 0.8rem;
+  min-width: 0;
+}
+
+.strip-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 1.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.on-air-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.05rem 0.55rem 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--on-air);
+  color: var(--on-air-ink);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.on-air-badge svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.strip-stats {
+  margin: 0;
+  padding: 0.65rem 1rem;
+  border-left: 1px solid var(--strip-edge);
+  display: grid;
+  align-content: center;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+}
+
+.strip-stats div {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.strip-stats dt {
+  color: var(--ink-3);
+  min-width: 4.5rem;
+}
+
+.strip-stats dd {
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* The one loud thing: a strip lights up while its squelch is open */
+
+.strip.on-air {
+  background: var(--on-air-wash);
+  border-color: var(--on-air);
+  box-shadow: inset 6px 0 0 var(--on-air);
+}
+
+.strip.on-air .strip-freq {
+  border-right-color: var(--on-air);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .strip {
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease,
+      box-shadow 0.25s ease;
+  }
+}
+
+/* Level meter: noise floor band, signal bar, squelch tick on a -60..0 dBFS scale */
+
+.meter {
+  position: relative;
+  height: 1rem;
+  background: var(--meter-track);
+  border-radius: 2px;
+}
+
+.meter-noise,
+.meter-signal {
+  position: absolute;
+  left: 0;
+}
+
+.meter-noise {
+  top: 0;
+  bottom: 0;
+  background: var(--noise);
+  border-radius: 2px 0 0 2px;
+}
+
+.meter-signal {
+  top: 0.3rem;
+  bottom: 0.3rem;
+  background: var(--signal);
+  border-radius: 0 4px 4px 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .meter-signal {
+    transition: width 0.35s ease-out;
+  }
+}
+
+.meter-squelch {
+  position: absolute;
+  top: -0.2rem;
+  bottom: -0.2rem;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--squelch);
+}
+
+.meter.stale {
+  opacity: 0.35;
+}
+
+/* Lower half */
+
+.lower {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr);
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.lower h2 {
+  margin-bottom: 0.5rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 0.35rem 0.5rem 0.35rem 0;
+  border-bottom: 1px solid var(--strip-edge);
+}
+
+td {
+  padding: 0.35rem 0.5rem 0.35rem 0;
+  border-bottom: 1px solid var(--strip-edge);
+}
+
+.num {
+  text-align: right;
+}
+
+.health {
+  margin: 0 0 0.75rem;
+  color: var(--ink);
+}
+
+.facts {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--strip-edge);
+  padding-bottom: 0.35rem;
+}
+
+.facts dt {
+  color: var(--ink-2);
+}
+
+.facts dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* Narrow screens */
+
+@media (max-width: 52rem) {
+  .strip {
+    grid-template-columns: 6rem minmax(0, 1fr);
+  }
+
+  .strip-stats {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--strip-edge);
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  }
+
+  .mhz {
+    font-size: 1.35rem;
+  }
+
+  .lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 30rem) {
+  h1 {
+    font-size: 1.6rem;
+  }
+
+  .strip-stats dt {
+    min-width: 0;
+  }
+}

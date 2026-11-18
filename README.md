@@ -6,8 +6,9 @@ from [docker-rtlsdrairband](https://github.com/ap-andersson/docker-rtlsdrairband
 container: a live stream that still plays in VLC and browsers, a dashboard, and a recordings
 browser with a waveform view.
 
-**Status: early work in progress.** Today it relays the live stream. See [PLAN.md](PLAN.md) for
-the design, decisions and what comes next.
+**Status: early work in progress.** Today it relays the live stream and has a live dashboard:
+levels and squelch per frequency, recent transmissions, receiver health. See [PLAN.md](PLAN.md)
+for the design, decisions and what comes next.
 
 ## How it works
 
@@ -31,7 +32,9 @@ outputs: (
 
 | Endpoint | What |
 |---|---|
+| `GET /` | The dashboard |
 | `GET /<mount>` | Live MP3 stream, e.g. `http://host:8000/essl.mp3` in VLC or a browser |
+| `GET /api/live` | JSON snapshot behind the dashboard; `/api/live/stream` pushes it every second (server-sent events) |
 | `GET /api/mounts` | JSON: mounts, current frequency (title), listeners, source state |
 | `GET /healthz` | Liveness |
 
@@ -45,6 +48,8 @@ outputs: (
 | `HUB_BURST_BYTES` | `24576` | Recent audio sent to a new listener at once, ~4 s at 48 kbps |
 | `HUB_SOURCE_TIMEOUT` | `30s` | Drop a source that sends nothing this long. rtl_airband is silent for ~10 s after connecting while the dongle starts. |
 | `HUB_MOUNT_GRACE` | `30s` | Keep listeners connected this long while the source reconnects |
+| `HUB_METRICS_URL` | (unset) | rtl_airband's `metrics_listen` endpoint, e.g. `http://rtlsdrairband:9101/metrics`. Without it the dashboard shows only the stream. |
+| `HUB_METRICS_INTERVAL` | `1s` | How often to read it |
 | `HUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
 ## Deploying to a host without a registry
@@ -65,8 +70,16 @@ default `rtlsdr-airband_default`) go in the same file.
 
 ## Development
 
+The UI is Preact + TypeScript + Vite in `web/`. It is built into `web/dist` and embedded in
+the Go binary, so build it before the binary:
+
 ```bash
+(cd web && npm ci && npm run build)
 go test -race ./...
 go build -o bin/airband-hub ./cmd/airband-hub
 docker build -t airband-hub .
 ```
+
+For UI work with hot reload, run `npm run dev` in `web/`. It forwards the API and the
+stream to a running hub, set with `HUB_URL` (default `http://localhost:8000`), e.g.
+`HUB_URL=http://raspberrypi.local:8090 npm run dev`.

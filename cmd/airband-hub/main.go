@@ -9,6 +9,9 @@
 //	HUB_SOURCE_TIMEOUT   drop a source that sends nothing this long (default 30s; rtl_airband
 //	                     sends no audio for ~10 s after connecting while the dongle starts)
 //	HUB_MOUNT_GRACE      keep listeners this long after the source drops (default 30s)
+//	HUB_METRICS_URL      rtl_airband's metrics endpoint, e.g. http://rtlsdrairband:9101/metrics.
+//	                     Without it the dashboard shows only the stream.
+//	HUB_METRICS_INTERVAL how often to read it (default 1s)
 //	HUB_LOG_LEVEL        debug, info, warn or error (default info)
 package main
 
@@ -24,8 +27,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ap-andersson/airband-hub/internal/airband"
 	"github.com/ap-andersson/airband-hub/internal/hub"
 	"github.com/ap-andersson/airband-hub/internal/relay"
+	"github.com/ap-andersson/airband-hub/web"
 )
 
 func main() {
@@ -74,6 +79,24 @@ func run() error {
 		return err
 	}
 
+	metricsInterval, err := envDuration("HUB_METRICS_INTERVAL", time.Second)
+	if err != nil {
+		return err
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	var tracker *airband.Tracker
+	if url := os.Getenv("HUB_METRICS_URL"); url != "" {
+		tracker = airband.NewTracker()
+		poller := &airband.Poller{URL: url, Interval: metricsInterval, Client: &http.Client{}, Tracker: tracker, Log: log}
+		go poller.Run(ctx)
+		log.Info("reading rtl_airband metrics", "url", url, "every", metricsInterval)
+	} else {
+		log.Info("HUB_METRICS_URL not set; the dashboard shows only the stream")
+	}
+
 	reg := relay.NewRegistry(relay.Options{BurstBytes: burst, Grace: grace})
 	srv := &http.Server{
 		Addr: env("HUB_LISTEN", ":8000"),
@@ -81,14 +104,15 @@ func run() error {
 			SourceUser:     env("HUB_SOURCE_USER", "source"),
 			SourcePassword: password,
 			SourceTimeout:  sourceTimeout,
+			Tracker:        tracker,
+			LiveInterval:   time.Second,
+			UI:             web.Handler(),
 		}, reg, log),
 		// no write timeout: listener streams never end
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	errc := make(chan error, 1)
 	go func() {
 		log.Info("listening", "addr", srv.Addr)

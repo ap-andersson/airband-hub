@@ -158,7 +158,17 @@ Implemented 2026-11-18 on branch `dev/metrics_endpoint`. Not committed yet.
     - 0.1% CPU and 7 MB RAM
     - reconnects after both a hub restart and an rtl_airband restart
 - [ ] Optional ICY metadata so VLC shows the current frequency.
-- [ ] Read `/metrics` and show a live dashboard: active frequency, levels, squelch, transmissions per hour.
+- [x] Live dashboard (2026-11-18), at `/` on the hub:
+  - The UI is Preact + TypeScript + Vite in `web/`, the same stack as sky-history, embedded in the binary with `go:embed`. The image went from 9.4 to 10.7 MB.
+  - `internal/airband` reads `HUB_METRICS_URL` every second (on the Pi: `http://rtlsdrairband:9101/metrics`). From the counters it derives:
+    - each completed transmission, with its exact duration (the histogram `_sum` delta) and its SNR bucket
+    - transmissions and airtime per frequency in the last hour
+    - clipping and input power over 10 s
+  - The history is in memory, so it starts empty after a hub restart.
+  - `/api/live` returns a snapshot, and `/api/live/stream` pushes it every second (SSE).
+  - Design: each frequency is shown as a "flight progress strip" with a level meter (noise floor band, signal bar, squelch tick on a -60 to 0 dBFS scale). The strip lights up amber while its squelch is open.
+  - Previewed in Chrome with real metrics and with fake on-air data.
+  - **Not yet checked:** the layout at phone width (it stacks below 52rem) and light mode.
 - [ ] Recordings browser:
   - list by date
   - exact frame index and waveform peaks per file (decode in Go), cached and backfilled in the background
@@ -169,10 +179,13 @@ Implemented 2026-11-18 on branch `dev/metrics_endpoint`. Not committed yet.
 - [ ] Replace the `airband-nginx` container.
 
 ### Phase 4: later / maybe
-- [ ] Config editing:
-  - write the conf and restart the airband container through a locked-down docker-socket-proxy (restart only)
+- [ ] Config editing (end goal: manage rtl_airband without ssh, e.g. edit the scan list):
+  - show and edit the whole `rtl_airband.conf` in the hub, and back it up before writing
+  - rtl_airband has no reload, so applying a change means restarting it. **Decided 2026-11-18:** if a Docker socket is
+    provided (preferably through a proxy that only allows restarting that container), the hub restarts it. Otherwise the hub
+    tells the user to restart it by hand.
   - auth
-  - back up the config before writing
+- [ ] Maybe: bookmarks on interesting points in the recordings.
 - [ ] Optional low-latency path: `udp_stream` PCM sent to the browser over WebSocket.
 - [ ] Optional split per-transmission recordings (`split_on_transmission` + `include_freq`).
 

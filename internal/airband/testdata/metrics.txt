@@ -1,0 +1,269 @@
+# HELP channel_activity_counter Loops of output_thread with frequency active.
+# TYPE channel_activity_counter counter
+channel_activity_counter{freq="118.805",label="SAAB TOWER 118.805"}	0
+channel_activity_counter{freq="129.800",label="MALMEN TOWER 129.800"}	0
+channel_activity_counter{freq="133.105",label="SAAB TOWER ALT 133.105"}	0
+channel_activity_counter{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0
+
+# HELP channel_noise_level Raw squelch noise_level.
+# TYPE channel_noise_level gauge
+channel_noise_level{freq="118.805",label="SAAB TOWER 118.805"}	0.109
+channel_noise_level{freq="129.800",label="MALMEN TOWER 129.800"}	0.104
+channel_noise_level{freq="133.105",label="SAAB TOWER ALT 133.105"}	0.097
+channel_noise_level{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0.095
+
+# HELP channel_dbfs_noise_level Squelch noise_level as dBFS.
+# TYPE channel_dbfs_noise_level gauge
+channel_dbfs_noise_level{freq="118.805",label="SAAB TOWER 118.805"}	-47.178
+channel_dbfs_noise_level{freq="129.800",label="MALMEN TOWER 129.800"}	-47.633
+channel_dbfs_noise_level{freq="133.105",label="SAAB TOWER ALT 133.105"}	-48.229
+channel_dbfs_noise_level{freq="135.855",label="OSTGOTA APPROACH 135.855"}	-48.400
+
+# HELP channel_signal_level Raw squelch signal_level.
+# TYPE channel_signal_level gauge
+channel_signal_level{freq="118.805",label="SAAB TOWER 118.805"}	0.114
+channel_signal_level{freq="129.800",label="MALMEN TOWER 129.800"}	0.108
+channel_signal_level{freq="133.105",label="SAAB TOWER ALT 133.105"}	0.111
+channel_signal_level{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0.109
+
+# HELP channel_dbfs_signal_level Squelch signal_level as dBFS.
+# TYPE channel_dbfs_signal_level gauge
+channel_dbfs_signal_level{freq="118.805",label="SAAB TOWER 118.805"}	-46.820
+channel_dbfs_signal_level{freq="129.800",label="MALMEN TOWER 129.800"}	-47.292
+channel_dbfs_signal_level{freq="133.105",label="SAAB TOWER ALT 133.105"}	-47.077
+channel_dbfs_signal_level{freq="135.855",label="OSTGOTA APPROACH 135.855"}	-47.205
+
+# HELP channel_squelch_counter Squelch open_count.
+# TYPE channel_squelch_counter counter
+channel_squelch_counter{freq="118.805",label="SAAB TOWER 118.805"}	0
+channel_squelch_counter{freq="129.800",label="MALMEN TOWER 129.800"}	0
+channel_squelch_counter{freq="133.105",label="SAAB TOWER ALT 133.105"}	0
+channel_squelch_counter{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0
+
+# HELP channel_squelch_level Squelch squelch_level.
+# TYPE channel_squelch_level gauge
+channel_squelch_level{freq="118.805",label="SAAB TOWER 118.805"}	0.869
+channel_squelch_level{freq="129.800",label="MALMEN TOWER 129.800"}	0.824
+channel_squelch_level{freq="133.105",label="SAAB TOWER ALT 133.105"}	1.087
+channel_squelch_level{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0.300
+
+# HELP channel_flappy_counter Squelch flappy_count.
+# TYPE channel_flappy_counter counter
+channel_flappy_counter{freq="118.805",label="SAAB TOWER 118.805"}	0
+channel_flappy_counter{freq="129.800",label="MALMEN TOWER 129.800"}	0
+channel_flappy_counter{freq="133.105",label="SAAB TOWER ALT 133.105"}	0
+channel_flappy_counter{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0
+
+# HELP channel_ctcss_counter count of windows with CTCSS detected.
+# TYPE channel_ctcss_counter counter
+channel_ctcss_counter{freq="118.805",label="SAAB TOWER 118.805"}	0
+channel_ctcss_counter{freq="129.800",label="MALMEN TOWER 129.800"}	0
+channel_ctcss_counter{freq="133.105",label="SAAB TOWER ALT 133.105"}	0
+channel_ctcss_counter{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0
+
+# HELP channel_no_ctcss_counter count of windows without CTCSS detected.
+# TYPE channel_no_ctcss_counter counter
+channel_no_ctcss_counter{freq="118.805",label="SAAB TOWER 118.805"}	0
+channel_no_ctcss_counter{freq="129.800",label="MALMEN TOWER 129.800"}	0
+channel_no_ctcss_counter{freq="133.105",label="SAAB TOWER ALT 133.105"}	0
+channel_no_ctcss_counter{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0
+
+# HELP channel_dbfs_squelch_level Squelch squelch_level as dBFS.
+# TYPE channel_dbfs_squelch_level gauge
+channel_dbfs_squelch_level{freq="118.805",label="SAAB TOWER 118.805"}	-29.178
+channel_dbfs_squelch_level{freq="129.800",label="MALMEN TOWER 129.800"}	-29.633
+channel_dbfs_squelch_level{freq="133.105",label="SAAB TOWER ALT 133.105"}	-27.229
+channel_dbfs_squelch_level{freq="135.855",label="OSTGOTA APPROACH 135.855"}	-38.400
+
+# HELP channel_split_tx_dropped_counter Transmissions dropped for being shorter than split_tx_drop_shorter_than.
+# TYPE channel_split_tx_dropped_counter counter
+channel_split_tx_dropped_counter{freq="118.805",label="SAAB TOWER 118.805"}	0
+channel_split_tx_dropped_counter{freq="129.800",label="MALMEN TOWER 129.800"}	0
+channel_split_tx_dropped_counter{freq="133.105",label="SAAB TOWER ALT 133.105"}	0
+channel_split_tx_dropped_counter{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0
+
+# HELP channel_squelch_open 1 while the squelch is open on this frequency, else 0. In scan mode only the frequency currently tuned can be open.
+# TYPE channel_squelch_open gauge
+channel_squelch_open{freq="118.805",label="SAAB TOWER 118.805"}	0
+channel_squelch_open{freq="129.800",label="MALMEN TOWER 129.800"}	0
+channel_squelch_open{freq="133.105",label="SAAB TOWER ALT 133.105"}	0
+channel_squelch_open{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0
+
+# HELP buffer_overflow_count Number of times a device's buffer has overflowed.
+# TYPE buffer_overflow_count counter
+buffer_overflow_count{device="0"}	0
+
+# HELP output_overrun_count Number of times a device or mixer output has overrun.
+# TYPE output_overrun_count counter
+output_overrun_count{device="0"}	0
+
+# HELP channel_transmission_snr_db Peak signal level of completed transmissions relative to the noise floor when squelch opened, in dB.
+# TYPE channel_transmission_snr_db histogram
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="3"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="6"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="9"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="12"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="15"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="18"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="21"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="24"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="27"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="30"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="33"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="36"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="39"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="42"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="45"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="48"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="51"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="54"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="57"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="60"}	0
+channel_transmission_snr_db_bucket{freq="118.805",label="SAAB TOWER 118.805",le="+Inf"}	0
+channel_transmission_snr_db_sum{freq="118.805",label="SAAB TOWER 118.805"}	0.000
+channel_transmission_snr_db_count{freq="118.805",label="SAAB TOWER 118.805"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="3"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="6"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="9"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="12"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="15"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="18"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="21"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="24"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="27"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="30"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="33"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="36"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="39"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="42"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="45"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="48"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="51"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="54"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="57"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="60"}	0
+channel_transmission_snr_db_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="+Inf"}	0
+channel_transmission_snr_db_sum{freq="129.800",label="MALMEN TOWER 129.800"}	0.000
+channel_transmission_snr_db_count{freq="129.800",label="MALMEN TOWER 129.800"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="3"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="6"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="9"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="12"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="15"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="18"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="21"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="24"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="27"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="30"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="33"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="36"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="39"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="42"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="45"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="48"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="51"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="54"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="57"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="60"}	0
+channel_transmission_snr_db_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="+Inf"}	0
+channel_transmission_snr_db_sum{freq="133.105",label="SAAB TOWER ALT 133.105"}	0.000
+channel_transmission_snr_db_count{freq="133.105",label="SAAB TOWER ALT 133.105"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="3"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="6"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="9"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="12"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="15"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="18"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="21"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="24"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="27"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="30"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="33"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="36"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="39"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="42"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="45"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="48"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="51"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="54"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="57"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="60"}	0
+channel_transmission_snr_db_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="+Inf"}	0
+channel_transmission_snr_db_sum{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0.000
+channel_transmission_snr_db_count{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0
+
+# HELP channel_transmission_duration_seconds Duration of completed transmissions; _sum is the total airtime.
+# TYPE channel_transmission_duration_seconds histogram
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="0.25"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="0.5"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="1"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="2"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="3"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="5"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="8"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="13"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="20"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="30"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="60"}	0
+channel_transmission_duration_seconds_bucket{freq="118.805",label="SAAB TOWER 118.805",le="+Inf"}	0
+channel_transmission_duration_seconds_sum{freq="118.805",label="SAAB TOWER 118.805"}	0.000
+channel_transmission_duration_seconds_count{freq="118.805",label="SAAB TOWER 118.805"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="0.25"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="0.5"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="1"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="2"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="3"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="5"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="8"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="13"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="20"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="30"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="60"}	0
+channel_transmission_duration_seconds_bucket{freq="129.800",label="MALMEN TOWER 129.800",le="+Inf"}	0
+channel_transmission_duration_seconds_sum{freq="129.800",label="MALMEN TOWER 129.800"}	0.000
+channel_transmission_duration_seconds_count{freq="129.800",label="MALMEN TOWER 129.800"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="0.25"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="0.5"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="1"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="2"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="3"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="5"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="8"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="13"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="20"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="30"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="60"}	0
+channel_transmission_duration_seconds_bucket{freq="133.105",label="SAAB TOWER ALT 133.105",le="+Inf"}	0
+channel_transmission_duration_seconds_sum{freq="133.105",label="SAAB TOWER ALT 133.105"}	0.000
+channel_transmission_duration_seconds_count{freq="133.105",label="SAAB TOWER ALT 133.105"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="0.25"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="0.5"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="1"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="2"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="3"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="5"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="8"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="13"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="20"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="30"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="60"}	0
+channel_transmission_duration_seconds_bucket{freq="135.855",label="OSTGOTA APPROACH 135.855",le="+Inf"}	0
+channel_transmission_duration_seconds_sum{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0.000
+channel_transmission_duration_seconds_count{freq="135.855",label="OSTGOTA APPROACH 135.855"}	0
+
+# HELP device_samples_total Complex I/Q samples read from an 8-bit device.
+# TYPE device_samples_total counter
+device_samples_total{device="0"}	3123573120
+
+# HELP device_clipped_samples_total Complex I/Q samples where I or Q was at the ADC rail; a rising rate means the gain is too high.
+# TYPE device_clipped_samples_total counter
+device_clipped_samples_total{device="0"}	0
+
+# HELP device_input_power_sum_total Sum of I/Q sample power, normalized so full scale is 1.0; divide its rate by the rate of device_samples_total for mean power.
+# TYPE device_input_power_sum_total counter
+device_input_power_sum_total{device="0"}	110010.322
+
+# HELP rtl_airband_build_info Always 1, labeled with the running version.
+# TYPE rtl_airband_build_info gauge
+rtl_airband_build_info{version="v7.0.1-9-gb305fe9"}	1
+

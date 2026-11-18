@@ -25,6 +25,9 @@ type Handler struct {
 	// SourceTimeout drops a source that sends nothing for this long (Icecast's source-timeout).
 	SourceTimeout time.Duration
 	Log           *slog.Logger
+	// Fallback serves GET/HEAD requests for paths that are not a live mount (the web UI).
+	// Without it they get 404.
+	Fallback http.Handler
 }
 
 // reservedPrefixes are paths the hub serves itself, so they can never be mounts.
@@ -144,7 +147,11 @@ func (h *Handler) serveSource(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) serveListener(w http.ResponseWriter, r *http.Request) {
 	m := h.Registry.Get(r.URL.Path)
 	if m == nil {
-		http.NotFound(w, r)
+		if h.Fallback != nil {
+			h.Fallback.ServeHTTP(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
 		return
 	}
 	info := m.Info()

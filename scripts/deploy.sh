@@ -23,7 +23,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "==> Syncing to ${DEPLOY_HOST}:${DEPLOY_DIR}"
 # shellcheck disable=SC2029  # DEPLOY_DIR is local config, meant to expand here
 ssh "${DEPLOY_HOST}" "mkdir -p '${DEPLOY_DIR}/src'"
-rsync -a --delete --exclude '.git/' --exclude 'bin/' --exclude 'deploy.env' \
+rsync -a --delete --exclude '.git/' --exclude 'bin/' --exclude 'deploy.env' --exclude 'web/node_modules/' \
 	"${REPO}/" "${DEPLOY_HOST}:${DEPLOY_DIR}/src/"
 rsync -a "${REPO}/deploy/compose.yml" "${DEPLOY_HOST}:${DEPLOY_DIR}/compose.yml"
 
