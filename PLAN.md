@@ -1,11 +1,13 @@
-# airband-hub plan
+# airband-hub: design and plan
 
-Living document. Update it as decisions are made and work lands.
+The design notes behind airband-hub: why it exists, the decisions made, what was found on the
+way, and what comes next. It is updated as work lands.
 
 ## Goal
 
-Replace the Icecast server, the stats-file scraper and the recordings nginx with
-two containers:
+Replace a typical RTLSDR-Airband setup (Icecast for the stream, a scraper for the stats file,
+a web server for the recordings, all around one big multi-process container) with two
+containers:
 
 - **airband**: `rtl_airband` only, in a small single-process image that is
   compiled at build time.
@@ -18,7 +20,7 @@ two containers:
 Related repos:
 
 - [RTLSDR-Airband fork](https://github.com/ap-andersson/RTLSDR-Airband): the radio software itself
-- [docker-rtlsdrairband fork](https://github.com/ap-andersson/docker-rtlsdrairband): today's all-in-one s6 container. The README should link back to it.
+- [docker-rtlsdrairband fork](https://github.com/ap-andersson/docker-rtlsdrairband): the all-in-one s6 container (rtl_airband + Icecast) this replaces
 
 ## Decisions
 
@@ -31,7 +33,11 @@ Related repos:
 | D5 | Keep the existing metric names (e.g. `channel_squelch_counter`) | Renaming them breaks dashboards. Not worth it. |
 | D6 | No JSON status endpoint for now | The hub gets all it needs from the stream push, the metadata updates and `/metrics` (see Data flow) |
 | D7 | Add a `channel_squelch_open` gauge (0/1 per frequency) | The only live value the hub can't get any other way |
-| D8 | Recordings are browsed through a waveform view with automatic transmission markers | This is how it's done by hand in Audacity today |
+| D8 | Recordings are browsed through a waveform view with automatic transmission markers | That is how one finds transmissions by hand in Audacity |
+| D9 | The UI is Preact + TypeScript + Vite, embedded in the Go binary | Several pages ahead (config editing), but still one container and one port |
+| D10 | MP3 decoding with minimp3 (C, vendored) via cgo | Pure-Go decoders cannot read 8 kHz MPEG-2.5, which is what rtl_airband writes |
+| D11 | rtl_airband is built with NFM off | NFM support also doubles the audio rate from 8 to 16 kHz |
+| D12 | Applying config changes restarts rtl_airband: through a restricted Docker socket if one is provided, otherwise the user is asked to | rtl_airband has no config reload |
 
 ## Architecture
 
@@ -64,176 +70,56 @@ Prometheus ── scrapes airband /metrics directly
 | Squelch open now | `channel_squelch_open` (D7) |
 | Recording waveforms and transmission markers | Peaks computed from the MP3 files, cached in the hub's own data volume |
 
-## Current setup on the Pi (as of 2026-11-18)
+## Status
 
-- One container (`ap-andersson/docker-rtlsdrairband`) running s6 with
-  Icecast on :80, rtl_airband, and ncat serving the stats file on :8080.
-- A separate `airband-nginx` serves `./recording` on :8081.
-- rtl_airband runs one RTL-SDR in scan mode with one channel and 4 frequencies, and two outputs:
-  - an icecast mount with `send_scan_freq_tags`, CBR 48 kbps
-  - a continuous **hourly** file (`essl_YYYYMMDD_HH.mp3`, dated subdirectories, default VBR, about 3.7 MB/h)
-- The current hour is written as `.mp3.tmp` and renamed when the hour is done.
-- ~59 GB of recordings since 2025-01.
-- Dev mode is on (`RTLSDRAIRBAND_BUILD_PLATFORM=generic` together with a source bind mount).
+**Done**
+- **`/metrics` in rtl_airband** ([RTLSDR-Airband fork](https://github.com/ap-andersson/RTLSDR-Airband), branch `dev/metrics_endpoint`):
+  - `metrics_listen = "host:port";` serves the same Prometheus text as the stats file, at `GET /metrics`.
+  - It is a hand-rolled HTTP server on its own thread.
+  - The response is rendered by the output thread through a request/publish handoff, so the HTTP thread never reads radio data.
+  - It adds the `channel_squelch_open` gauge and writes non-finite values as `NaN`/`+Inf`/`-Inf`.
+  - Unit and system tests; the system tests parse the output with `prometheus_client`.
+- **Lean rtl_airband image** (branch `dev/docker_build_options`):
+  - the fork's Alpine Dockerfile with an `NFM` build argument and a BuildKit cache mount for the build tree
+  - 32 MB, runs only `rtl_airband` under tini
+  - a rebuild after a source change takes seconds
+- **The stack:** `deploy/compose.yml` runs rtl-airband and the hub, and `scripts/deploy.sh` builds both on the host.
+  - rtl-airband sits behind a compose profile, so its image can be built while another container still owns the SDR.
+  - `compose.legacy.yml` lets the hub run next to an older container during a migration.
+- **Live stream:**
+  - Icecast source protocol, with the frequency titles
+  - fan-out to listeners, who start at the live edge
+  - slow listeners are dropped
+  - a grace period so listeners survive an rtl_airband restart
+  - ICY metadata for VLC
+  - an Icecast-compatible `/status-json.xsl`, for players such as tar1090's
+- **Dashboard:**
+  - a strip per frequency with a level meter (noise floor, signal, squelch level); the strip lights up while squelch is open
+  - recent transmissions, with exact length and SNR range, derived from the metrics histograms
+  - receiver health
+- **Recordings browser:**
+  - a waveform per recorded hour, with transmission markers
+  - click to play from an exact frame
+  - a 5-minute detail view
+  - previous/next transmission and skip silence
+  - waveforms cached on disk and analysed in the background
+  - days grouped in the viewer's time zone
 
-## Work plan
+**Next**
+- [ ] **Access control.** Today everything is open. Before the hub is reachable from the internet, the recordings and (later) config editing need a login, or the hub needs a way to limit them to the LAN.
+- [ ] Publish images: GitHub Actions building multi-arch images for ghcr, instead of building on the host.
+- [ ] Pull requests for the two RTLSDR-Airband branches, first to the fork and maybe upstream later.
+- [ ] Config editing (the end goal): edit `rtl_airband.conf`, starting with the scan list, in the hub. Back it up before writing, then restart (D12).
+- [ ] Check the dashboard at phone width and in light mode.
 
-### Phase 0: catch up with upstream
-Done 2026-11-18, merged locally to `main` and not pushed yet.
-- [x] RTLSDR-Airband: merge `upstream/main`. It is 1 commit behind: #583, Ubuntu
-  26.04 and CMake fails at configure time if a library is missing. It conflicts
-  in `CLAUDE.md`, because upstream moved the src notes to `src/CLAUDE.md` and
-  added a ci-and-docker skill. Resolve it by moving the fork's Stats/Metrics and
-  retune notes into `src/CLAUDE.md`.
-- [x] docker-rtlsdrairband: merge `upstream/main`. It is 13 commits behind:
-  - Icecast 2.5 `burst-on-connect` fix
-  - Debian forky build
-  - fail-fast build steps
-  - CI bumps
-
-  It conflicts in the two workflow files. Resolve it by taking upstream's newer
-  `sdre.yml` pin and keeping the fork's `permissions:` blocks.
-
-### Phase 1: `/metrics` in rtl_airband (RTLSDR-Airband repo, upstream quality)
-Implemented 2026-11-18 on branch `dev/metrics_endpoint`. Not committed yet.
-- [x] Config: `metrics_listen = "host:port";` (also `"[::1]:9101"`, and `":9101"` for all interfaces with IPv6 dual-stack). The endpoint is off when it's not set. An invalid address or a busy port aborts startup.
-- [x] HTTP server (`src/metrics_server.cpp`):
-  - hand-rolled, no new dependency, on its own thread
-  - one connection at a time
-  - `GET`/`HEAD /metrics`, 404 for other paths, 405 with `Allow` for other methods, 400 for a malformed request, 431 above 8 KiB
-  - 5 s deadline per request
-  - closes connections gracefully so the client never gets a reset instead of the response
-- [x] Rendering: the HTTP thread asks the first output thread through `MetricsExchange`. That thread builds the text with `open_memstream()` using the same `write_metrics()` as the stats file, so the HTTP thread never reads radio data. It returns 503 if there's no answer within 2 s.
-- [x] `channel_squelch_open` gauge. In scan mode only the tuned frequency can report 1.
-- [x] Non-finite values are written as `NaN`/`+Inf`/`-Inf` (printf's `-nan` breaks parsers).
-- [x] Tests:
-  - 25 new unit tests (`src/test_metrics_server.cpp`, plus non-finite values in `test_metrics.cpp`)
-  - 6 new system tests (`system_tests/tests/test_metrics_endpoint.py`): a live scrape parsed with `prometheus_client` and compared to the stats file, plus the config and port-in-use errors
-  - all 4 build configurations build, and 157 unit tests and 63 system tests pass
-- [x] `CLAUDE.md`/`src/CLAUDE.md` updated, and wiki text drafted.
-- [x] Tested on the Pi 2026-11-18 with the real dongle:
-  - 200 with the correct content type, 404 and 405 work
-  - ~120 ms per scrape, which is the wait for the next output loop
-  - 21 metric families, the same as the file
-  - `channel_squelch_open` went to 1 on 129.800 during real transmissions
-  - Icecast reconnected and the old :8080 scraper still works
-- [x] Committed `b305fe9` on `dev/metrics_endpoint` (not pushed).
-- [x] the Pi switched 2026-11-18: the host's :8080, Prometheus' existing target, now goes to the native endpoint (container :9101). The ncat scraper is off.
-- [ ] Watch it in Grafana. Confirm Prometheus scrapes `/metrics`: the native endpoint returns 404 for any other path.
-- [ ] Push and open a PR to the fork's main. Upstream PR later? The docker-rtlsdrairband ncat scraper can then be dropped.
-- Notes:
-  - `prometheus-client` was added as a system-test dependency.
-  - `uv.lock` was regenerated by a newer uv (lockfile revision 3 -> 5), so its diff is bigger than the one new package.
-
-### Phase 2: airband container image
-- [x] The image is the fork's Alpine Dockerfile (branch `dev/docker_build_options`, based on `dev/metrics_endpoint`), with two changes:
-  - **`ARG NFM`** (default TRUE, as upstream). NFM support also doubles `WAVE_RATE` from 8 to 16 kHz, and the Pi has always run with NFM off, so the stack builds with `NFM=FALSE`.
-  - **A BuildKit cache mount for the build tree**, one per architecture. A rebuild after a source change takes ~8 s locally; the binaries are copied out because the mount is not part of the layer.
-
-  Result: 32 MB, only `rtl_airband` under tini, unit tests run during the build.
-- [x] The stack: `deploy/compose.yml` in airband-hub holds rtl-airband and the hub. `scripts/deploy.sh` syncs `AIRBAND_SRC` and builds both on the Pi.
-  - rtl-airband is behind the compose profile `airband`, so it only starts after the switch.
-  - `compose.legacy.yml` keeps the hub on the old container's network until then.
-  - This replaces the old "sync source and recompile on start" dev loop.
-- [x] The image was built on the Pi 2026-11-18 (`v7.0.1-10-g40ae6ec`), but it is not running yet.
-- [x] **Switch-over done 2026-11-18 ~21:50 CET** (port 80 to the hub, rtl-airband takes the SDR), with a backup of the config and `.env` first:
-  1. Remove the Icecast output (127.0.0.1:80) from `~/rtlsdr-airband/config/rtl_airband.conf`.
-  2. In `~/airband-hub/.env`:
-     - remove `COMPOSE_FILE` and `HUB_METRICS_URL`
-     - add `COMPOSE_PROFILES=airband`, `AIRBAND_CONFIG=/home/pi/rtlsdr-airband/config/rtl_airband.conf` and `HUB_HOST_PORT=80`
-  3. `docker compose down` in `~/rtlsdr-airband`, as Andreas chose. This also removed `airband-nginx`; both can be recreated with `up -d` there.
-  4. `docker compose up -d --remove-orphans` in `~/airband-hub`.
-  5. Rollback: `docker compose stop rtl-airband` and restore `HUB_HOST_PORT` in `~/airband-hub`, restore `config/rtl_airband.conf.pre-switch` and `.env.pre-switch`, then `docker compose up -d` in `~/rtlsdr-airband`.
-
-  Checked after the switch:
-  - the dongle is found
-  - recording continues in the current hour's file
-  - the hub gets the stream and metrics
-  - `:80/essl.mp3` and the dashboard work over the LAN
-  - `:8080/metrics` is scraped by VictoriaMetrics (`up` = 1)
-  - no overruns
-- [ ] Later, once the new setup has proven itself: remove `~/rtlsdr-airband/docker-compose.yml` (old), `src-rtlsdr-airband/`, `src-docker/`, `icecast.xml` and the old images.
-
-### Phase 3: airband-hub MVP
-- [x] Go module skeleton (`github.com/ap-andersson/airband-hub`).
-  - Dockerfile: static binary on distroless, 9.4 MB image.
-  - README with a link back to docker-rtlsdrairband.
-- [x] Icecast source protocol receiver (`internal/icecast`):
-  - `SOURCE`/`PUT` with a 401 Basic challenge, then a hijacked raw body
-  - 403 when a mount is already in use
-  - source idle timeout
-  - `/admin/metadata?mode=updinfo` with an `<iceresponse>` reply
-  - **first:** captured what libshout sends (see Findings)
-- [x] Listener relay (`internal/relay`):
-  - `GET`/`HEAD /<mount>` fan-out
-  - a burst buffer cut to an MP3 frame start
-  - slow listeners are dropped and never block the source
-  - a 30 s grace period, so listeners survive an rtl_airband restart
-- [x] `GET /api/mounts` (mount, title = active frequency, listeners, source state) and `/healthz`.
-- [x] Tests:
-  - unit tests replay the captured libshout session over TCP, all passing with `-race`
-  - end-to-end with a real rtl_airband in the devcontainer: login accepted, burst after 0.01 s starting at `ffe3`, frequency title received
-- [x] Running on the Pi since 2026-11-18, next to Icecast. It is built on the Pi by `scripts/deploy.sh` (see the README).
-  - It lives in `~/airband-hub`.
-  - Players reach it on host port 8090.
-  - It joins the `rtlsdr-airband_default` network, so rtl_airband's second `icecast` output uses `server = "airband-hub"`. The old config is saved as `config/rtl_airband.conf.pre-hub`.
-  - Checked:
-    - ~6.2 KB/s in
-    - a 10 s stream over the LAN
-    - 0.1% CPU and 7 MB RAM
-    - reconnects after both a hub restart and an rtl_airband restart
-- [x] ICY metadata (2026-11-18). Players that send `Icy-MetaData: 1` (VLC) get `StreamTitle` every 8192 bytes (~1.4 s), so VLC shows the frequency of the latest transmission.
-- [x] Lower latency: the burst default is now 0. With the old 24 KB burst, listeners stayed ~4 s behind live, more than the Icecast on the Pi (`burst-size 0`).
-- [x] Live dashboard (2026-11-18), at `/` on the hub:
-  - The UI is Preact + TypeScript + Vite in `web/`, the same stack as sky-history, embedded in the binary with `go:embed`. The image went from 9.4 to 10.7 MB.
-  - `internal/airband` reads `HUB_METRICS_URL` every second (on the Pi: `http://rtlsdrairband:9101/metrics`). From the counters it derives:
-    - each completed transmission, with its exact duration (the histogram `_sum` delta) and its SNR bucket
-    - transmissions and airtime per frequency in the last hour
-    - clipping and input power over 10 s
-  - The history is in memory, so it starts empty after a hub restart.
-  - `/api/live` returns a snapshot, and `/api/live/stream` pushes it every second (SSE).
-  - Design: each frequency is shown as a "flight progress strip" with a level meter (noise floor band, signal bar, squelch tick on a -60 to 0 dBFS scale). The strip lights up amber while its squelch is open.
-  - Previewed in Chrome with real metrics and with fake on-air data.
-  - **Not yet checked:** the layout at phone width (it stacks below 52rem) and light mode.
-- [x] Recordings browser (2026-11-18), at `/recordings`:
-  - `internal/mp3`:
-    - Decoding: pure-Go go-mp3 cannot read 8 kHz (MPEG-2.5), so minimp3 is vendored and called per frame via cgo. One hour decodes in 0.2 s on the laptop and ~0.5-1.5 s on the Pi.
-    - A pure-Go frame scanner builds the exact frame index. It skips the Xing frame, resyncs after garbage and handles appended sessions and truncated `.tmp` files.
-    - The decoder also skips the Xing frame, so waveform and playback share one timeline (they used to be 72 ms apart).
-  - `internal/recordings`:
-    - Lists the files (names parsed, UTC unless `HUB_RECORDINGS_LOCALTIME`).
-    - Analyses each file into 10 peaks/s on a -60..0 dBFS byte scale, plus transmissions (sound above -60 dBFS, gaps < 1.5 s merged, < 0.3 s dropped).
-    - Caches results gzipped in `HUB_DATA_DIR` (~6 KB/h) and backfills newest first.
-    - Serves audio from an exact frame (`ServeContent`, with range support).
-    - Groups days in the viewer's time zone (`?tz=`, tzdata embedded).
-    - File access goes through `os.Root`.
-  - UI:
-    - A day list.
-    - A row per hour with an overview waveform, loaded lazily; quiet hours collapse to one line.
-    - Clicking near a transmission starts it 0.3 s early.
-    - A 5-minute detail view and a list of transmission chips.
-    - A player bar: previous/next transmission (Alt+arrows), Space to play/pause, and **Skip silence**, which jumps to the next transmission.
-    - The waveform is drawn as the square root of linear amplitude, so speech has shape and distant signals still show.
-  - The image is now 13.2 MB: static cgo build, a gcc stage, still distroless.
-  - On the Pi: `~/rtlsdr-airband/recording` is mounted read-only, the cache is in `~/airband-hub/data`, and the container runs as uid 1000. The backfill does ~40 files/min, so the 16,471 recordings take ~7 h. It uses ~47% of one core, with no rtl_airband overruns.
-  - Previewed in Chrome on two real days: playback, snapping, detail view and skip silence all work.
-  - **Ideas for later:**
-    - continue into the next hour when a file ends
-    - zoom by dragging
-    - a day-wide "transmissions only" playlist
-    - bookmarks
-- [ ] Replace the `airband-nginx` container.
-
-### Phase 4: later / maybe
-- [ ] Config editing (end goal: manage rtl_airband without ssh, e.g. edit the scan list):
-  - show and edit the whole `rtl_airband.conf` in the hub, and back it up before writing
-  - rtl_airband has no reload, so applying a change means restarting it. **Decided 2026-11-18:** if a Docker socket is
-    provided (preferably through a proxy that only allows restarting that container), the hub restarts it. Otherwise the hub
-    tells the user to restart it by hand.
-  - auth
-- [ ] Maybe: bookmarks on interesting points in the recordings.
-- [ ] Optional low-latency path: `udp_stream` PCM sent to the browser over WebSocket.
-- [ ] Optional split per-transmission recordings (`split_on_transmission` + `include_freq`).
+**Ideas**
+- Set the title from the metrics when squelch opens, so it survives hub restarts and updates on every transmission
+- Continue playback into the next hour
+- Zoom the waveform by dragging
+- A whole-day "transmissions only" playlist
+- Bookmarks on interesting points in the recordings
+- A low-latency path: `udp_stream` PCM sent to the browser over WebSocket
+- The hub's own metrics (listeners, relay health)
 
 ## Findings
 
@@ -259,7 +145,7 @@ It is the Icecast 2 "SOURCE" protocol, **not PUT**:
    The expected reply is `200` with an `<iceresponse>` XML body.
    It is sent `shout_metadata_delay` (3 s) after the retune, so it lines up with the audio.
 
-### Behaviour seen on the Pi
+### Behaviour seen in use
 - **Silent after connecting:** rtl_airband connects its outputs before the dongle is running and sends no
   audio for ~10 s. With a 10 s source timeout the hub dropped it and rtl_airband reconnected 10 s
   later, so the default timeout is now 30 s.
@@ -270,7 +156,7 @@ It is the Icecast 2 "SOURCE" protocol, **not PUT**:
   (`src/rtl_airband.cpp:171`). So it is empty after a restart until the first transmission. The
   dashboard should label it "last active". The `channel_squelch_open` metric shows what is open right now.
 
-### Seeking in the hourly VBR recordings (one real file, 2026-11-18 16:00)
+### Seeking in the hourly VBR recordings (measured on a real hourly file)
 - The file is MPEG-2 Layer III at 8 kHz, with 50,000 frames of 72 ms each and **98% of frames at 8 kbps (silence)**.
 - It has a valid Xing header with a seek table. rtl_airband writes it when it closes the file
   (`lame_get_lametag_frame`, `src/output.cpp:410`).
@@ -291,10 +177,7 @@ It is the Icecast 2 "SOURCE" protocol, **not PUT**:
   must not trust the Xing header. Scan the frames instead.
 - **Losing LiveATC-style feeding:** a second `icecast` output to an external
   server is still possible if it's ever needed.
-- **Security:** the dashboard and any config/restart feature need auth if
-  they're ever reachable outside the LAN. `docker.sock` must never be mounted
-  directly.
-
-## Open questions
-
-- Should the hub re-export its own metrics (listeners, relay health)?
+- **Security:** the hub has no login yet. Anyone who can reach it can listen, browse and
+  download all recordings, and later edit the config. Do not forward its port to the
+  internet until access control exists. `docker.sock` must never be mounted directly; use
+  a proxy that only allows restarting the rtl_airband container.

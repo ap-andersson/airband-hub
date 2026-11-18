@@ -98,7 +98,9 @@ function usePlayer() {
     [play],
   );
 
+  // the playhead and skip-silence need a per-frame check, but only while audio plays
   useEffect(() => {
+    if (!state.playing) return;
     const el = audio.current;
     let frame = 0;
     const tick = () => {
@@ -114,6 +116,7 @@ function usePlayer() {
             } else {
               el.pause();
               setState((st) => ({ ...st, playing: false }));
+              return;
             }
             frame = requestAnimationFrame(tick);
             return;
@@ -124,14 +127,18 @@ function usePlayer() {
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [state.playing, play]);
+
+  useEffect(() => {
+    const el = audio.current;
     const ended = () => setState((s) => ({ ...s, playing: false }));
     el.addEventListener("ended", ended);
     return () => {
-      cancelAnimationFrame(frame);
       el.removeEventListener("ended", ended);
       el.pause();
     };
-  }, [play]);
+  }, []);
 
   return { state, play, toggle, jump, skipSilence, setSkipSilence };
 }
