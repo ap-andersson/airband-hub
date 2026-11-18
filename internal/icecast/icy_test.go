@@ -126,3 +126,21 @@ func TestListenerWithoutICYGetsPlainAudio(t *testing.T) {
 		t.Fatal("plain stream altered")
 	}
 }
+
+func TestListenerStreamIsNotChunked(t *testing.T) {
+	srv, reg := newServer(t, time.Minute)
+	connectSource(t, srv, "/essl.mp3")
+	waitFor(t, "mount", func() bool { return reg.Get("/essl.mp3") != nil })
+	c := dial(t, srv)
+	io.WriteString(c, "GET /essl.mp3 HTTP/1.1\r\nHost: x\r\nIcy-MetaData: 1\r\n\r\n")
+	c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 4096)
+	n, _ := c.Read(buf)
+	head := strings.ToLower(string(buf[:n]))
+	if strings.Contains(head, "transfer-encoding") || strings.Contains(head, "content-length") {
+		t.Fatalf("stream must be raw, like Icecast's:\n%s", head)
+	}
+	if !strings.Contains(head, "icy-metaint: 8192") {
+		t.Fatalf("no icy-metaint:\n%s", head)
+	}
+}

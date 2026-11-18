@@ -170,6 +170,11 @@ func (h *Handler) serveListener(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Send the stream like Icecast: not chunked, ending when the connection closes. Players
+	// count ICY metadata intervals on the raw bytes, which chunk framing would throw off.
+	// net/http skips chunking (and closes after the reply) for "Transfer-Encoding: identity".
+	hdr.Set("Transfer-Encoding", "identity")
+
 	var out io.Writer = w
 	if r.Header.Get("Icy-MetaData") == "1" {
 		hdr.Set("icy-metaint", strconv.Itoa(icyMetaint))
