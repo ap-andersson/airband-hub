@@ -138,6 +138,41 @@ function usePlayer() {
 
 type Player = ReturnType<typeof usePlayer>;
 
+type Order = "oldest" | "newest";
+
+// remembered per browser; storage can be unavailable (private windows), so it is optional
+function useOrder(): [Order, (o: Order) => void] {
+  const [order, setOrder] = useState<Order>(() => {
+    try {
+      return localStorage.getItem("hub.hourOrder") === "newest" ? "newest" : "oldest";
+    } catch {
+      return "oldest";
+    }
+  });
+  const set = (o: Order) => {
+    setOrder(o);
+    try {
+      localStorage.setItem("hub.hourOrder", o);
+    } catch {
+      /* not remembered, still applied */
+    }
+  };
+  return [order, set];
+}
+
+function OrderToggle({ order, onChange }: { order: Order; onChange: (o: Order) => void }) {
+  return (
+    <div class="segmented" role="group" aria-label="Order of the hours">
+      <button type="button" aria-pressed={order === "oldest"} onClick={() => onChange("oldest")}>
+        Chronological
+      </button>
+      <button type="button" aria-pressed={order === "newest"} onClick={() => onChange("newest")}>
+        Newest first
+      </button>
+    </div>
+  );
+}
+
 export function Recordings({ enabled, url }: { enabled: boolean; url: URL }) {
   const days = useJSON<Day[]>(enabled ? `/api/recordings/days?tz=${encodeURIComponent(tz)}` : null);
   const date = url.searchParams.get("date") ?? days.data?.[0]?.date ?? null;
@@ -145,6 +180,8 @@ export function Recordings({ enabled, url }: { enabled: boolean; url: URL }) {
   const recs = useJSON<Recording[]>(date ? `/api/recordings?date=${date}&tz=${encodeURIComponent(tz)}` : null, refresh);
   const player = usePlayer();
   const [open, setOpen] = useState<{ path: string; focus: number } | null>(null);
+  const [order, setOrder] = useOrder();
+  const hours = recs.data ? (order === "newest" ? [...recs.data].reverse() : recs.data) : null;
 
   // the day being recorded right now gains files and grows; look again every minute
   useEffect(() => {
@@ -167,12 +204,17 @@ export function Recordings({ enabled, url }: { enabled: boolean; url: URL }) {
     <main class="recordings">
       <DayList days={days.data} error={days.error} selected={date} />
       <section class="day" aria-labelledby="day-title">
-        {date && <h2 id="day-title">{dayFmt.format(localDate(date))}</h2>}
+        {date && (
+          <div class="day-head">
+            <h2 id="day-title">{dayFmt.format(localDate(date))}</h2>
+            <OrderToggle order={order} onChange={setOrder} />
+          </div>
+        )}
         {recs.error && <p class="empty">Cannot list the recordings: {recs.error}</p>}
         {days.data?.length === 0 && <p class="empty">No recordings yet. They appear here once rtl_airband's file output has written one.</p>}
         {recs.data?.length === 0 && <p class="empty">No recordings start on this day.</p>}
         <ol class="hours">
-          {recs.data?.map((rec) => (
+          {hours?.map((rec) => (
             <HourRow
               key={rec.path}
               rec={rec}
