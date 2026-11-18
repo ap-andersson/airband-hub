@@ -33,11 +33,12 @@ type Handler struct {
 }
 
 // reservedPrefixes are paths the hub serves itself, so they can never be mounts.
-var reservedPrefixes = []string{"/api/", "/admin/", "/healthz"}
+var reservedPrefixes = []string{"/api/", "/admin/", "/healthz", "/status-json.xsl"}
 
-// Register adds the metadata endpoint and a catch-all for sources and listeners.
+// Register adds the metadata and status endpoints and a catch-all for sources and listeners.
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/metadata", h.serveMetadata)
+	mux.HandleFunc("GET /status-json.xsl", h.serveStatusJSON)
 	mux.HandleFunc("/", h.serveMount)
 }
 

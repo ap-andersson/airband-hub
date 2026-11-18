@@ -35,6 +35,7 @@ outputs: (
 |---|---|
 | `GET /` | The dashboard |
 | `GET /<mount>` | Live MP3 stream, e.g. `http://host:8000/essl.mp3` in VLC or a browser. Players that send `Icy-MetaData: 1` (VLC) get ICY metadata, so they show the frequency of the latest transmission. |
+| `GET /status-json.xsl` | Icecast-compatible status (mounts, current title), so players written for Icecast, such as tar1090's airband player, keep showing the title |
 | `GET /api/live` | JSON snapshot behind the dashboard; `/api/live/stream` pushes it every second (server-sent events) |
 | `GET /api/recordings/...` | Days, recordings, waveforms, audio from an exact time, downloads (see `internal/recordings/handlers.go`) |
 | `GET /api/mounts` | JSON: mounts, current frequency (title), listeners, source state |
