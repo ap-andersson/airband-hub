@@ -148,7 +148,15 @@ Implemented 2026-11-18 on branch `dev/metrics_endpoint`. Not committed yet.
 - [x] Tests:
   - unit tests replay the captured libshout session over TCP, all passing with `-race`
   - end-to-end with a real rtl_airband in the devcontainer: login accepted, burst after 0.01 s starting at `ffe3`, frequency title received
-- [ ] Run on the Pi next to Icecast (a second `icecast` output in rtl_airband pointing at the hub). Needs an arm64 image.
+- [x] Running on the Pi since 2026-11-18, next to Icecast. It is built on the Pi by `scripts/deploy.sh` (see the README).
+  - It lives in `~/airband-hub`.
+  - Players reach it on host port 8090.
+  - It joins the `rtlsdr-airband_default` network, so rtl_airband's second `icecast` output uses `server = "airband-hub"`. The old config is saved as `config/rtl_airband.conf.pre-hub`.
+  - Checked:
+    - ~6.2 KB/s in
+    - a 10 s stream over the LAN
+    - 0.1% CPU and 7 MB RAM
+    - reconnects after both a hub restart and an rtl_airband restart
 - [ ] Optional ICY metadata so VLC shows the current frequency.
 - [ ] Read `/metrics` and show a live dashboard: active frequency, levels, squelch, transmissions per hour.
 - [ ] Recordings browser:
@@ -191,6 +199,15 @@ It is the Icecast 2 "SOURCE" protocol, **not PUT**:
    It is also tried without auth first and then with Basic auth.
    The expected reply is `200` with an `<iceresponse>` XML body.
    It is sent `shout_metadata_delay` (3 s) after the retune, so it lines up with the audio.
+
+### Behaviour seen on the Pi
+- **Silent after connecting:** rtl_airband connects its outputs before the dongle is running and sends no
+  audio for ~10 s. With a 10 s source timeout the hub dropped it and rtl_airband reconnected 10 s
+  later, so the default timeout is now 30 s.
+- **The title is the frequency of the latest transmission, not the frequency being scanned.** rtl_airband sends a
+  tag only when squelch opens on a different frequency from the last active one
+  (`src/rtl_airband.cpp:171`). So it is empty after a restart until the first transmission. The
+  dashboard should label it "last active". The `channel_squelch_open` metric shows what is open right now.
 
 ### Seeking in the hourly VBR recordings (one real file, 2026-11-18 16:00)
 - The file is MPEG-2 Layer III at 8 kHz, with 50,000 frames of 72 ms each and **98% of frames at 8 kbps (silence)**.

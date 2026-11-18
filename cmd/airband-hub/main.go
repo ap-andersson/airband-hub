@@ -6,7 +6,8 @@
 //	HUB_SOURCE_PASSWORD  password rtl_airband's icecast output uses (required)
 //	HUB_SOURCE_USER      username for it (default "source")
 //	HUB_BURST_BYTES      recent stream sent to a new listener at once (default 24576, ~4 s at 48 kbps)
-//	HUB_SOURCE_TIMEOUT   drop a source that sends nothing this long (default 10s)
+//	HUB_SOURCE_TIMEOUT   drop a source that sends nothing this long (default 30s; rtl_airband
+//	                     sends no audio for ~10 s after connecting while the dongle starts)
 //	HUB_MOUNT_GRACE      keep listeners this long after the source drops (default 30s)
 //	HUB_LOG_LEVEL        debug, info, warn or error (default info)
 package main
@@ -64,7 +65,7 @@ func run() error {
 	if err != nil || burst < 0 {
 		return errors.New("HUB_BURST_BYTES must be a non-negative number")
 	}
-	sourceTimeout, err := envDuration("HUB_SOURCE_TIMEOUT", 10*time.Second)
+	sourceTimeout, err := envDuration("HUB_SOURCE_TIMEOUT", 30*time.Second)
 	if err != nil {
 		return err
 	}

@@ -43,9 +43,25 @@ outputs: (
 | `HUB_SOURCE_USER` | `source` | Username for it |
 | `HUB_LISTEN` | `:8000` | Listen address |
 | `HUB_BURST_BYTES` | `24576` | Recent audio sent to a new listener at once, ~4 s at 48 kbps |
-| `HUB_SOURCE_TIMEOUT` | `10s` | Drop a source that sends nothing this long |
+| `HUB_SOURCE_TIMEOUT` | `30s` | Drop a source that sends nothing this long. rtl_airband is silent for ~10 s after connecting while the dongle starts. |
 | `HUB_MOUNT_GRACE` | `30s` | Keep listeners connected this long while the source reconnects |
 | `HUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+
+## Deploying to a host without a registry
+
+`scripts/deploy.sh` syncs this repository to a host over ssh, builds the image there and
+restarts the container with `deploy/compose.yml`:
+
+```bash
+cp deploy.env.example deploy.env   # once: DEPLOY_HOST (ssh target) and DEPLOY_DIR
+scripts/deploy.sh                  # sync, build on the host, restart
+scripts/deploy.sh --logs           # the same, then follow the logs
+```
+
+On the first deploy it creates `DEPLOY_DIR/.env` (mode 600) with a random
+`HUB_SOURCE_PASSWORD`. Put that password in rtl_airband's `icecast` output. Other `HUB_*`
+settings, `HUB_HOST_PORT` (default 8090) and `AIRBAND_NETWORK` (rtl_airband's Docker network,
+default `rtlsdr-airband_default`) go in the same file.
 
 ## Development
 

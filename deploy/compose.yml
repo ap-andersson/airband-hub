@@ -1,0 +1,21 @@
+# Compose file used on the deploy host by scripts/deploy.sh. It builds the image from the
+# source synced to ./src, so no registry is needed.
+services:
+  airband-hub:
+    build: ./src
+    image: airband-hub:local
+    container_name: airband-hub
+    restart: unless-stopped
+    # HUB_SOURCE_PASSWORD and other HUB_* settings; created by deploy.sh on first deploy
+    env_file: .env
+    ports:
+      - "${HUB_HOST_PORT:-8090}:8000"
+    networks:
+      - default
+      - airband
+
+networks:
+  # rtl_airband's network, so its icecast output can use server = "airband-hub"
+  airband:
+    external: true
+    name: ${AIRBAND_NETWORK:-rtlsdr-airband_default}
