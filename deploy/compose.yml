@@ -1,14 +1,10 @@
 # The airband stack: rtl_airband (owns the SDR) and airband-hub (stream, dashboard,
-# recordings). Used on the deploy host by scripts/deploy.sh, which syncs both sources and
-# builds the images there, so no registry is needed. Settings come from .env next to it.
+# recordings), using the images GitHub Actions publishes. Settings come from .env next to it.
+# compose.build.yml swaps in images built on the host from source (scripts/deploy.sh --build).
 services:
   rtl-airband:
-    build:
-      context: ./airband-src
-      args:
-        # AM airband only: NFM support would also double the audio rate to 16 kHz
-        NFM: "FALSE"
-    image: rtl-airband:local
+    # AM only: built with NFM=FALSE, since NFM support also doubles the audio rate to 16 kHz
+    image: ${AIRBAND_IMAGE:-ghcr.io/ap-andersson/rtlsdr-airband:latest}
     container_name: rtl-airband
     restart: unless-stopped
     # starts only with COMPOSE_PROFILES=airband in .env, so its image can be built while
@@ -31,8 +27,7 @@ services:
       start_period: 30s
 
   airband-hub:
-    build: ./src
-    image: airband-hub:local
+    image: ${HUB_IMAGE:-ghcr.io/ap-andersson/airband-hub:latest}
     container_name: airband-hub
     restart: unless-stopped
     # HUB_SOURCE_PASSWORD and other HUB_* settings; created by deploy.sh on first deploy

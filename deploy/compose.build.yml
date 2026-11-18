@@ -1,0 +1,14 @@
+# Build both images on the deploy host from the sources scripts/deploy.sh --build syncs to
+# ./src (this repository) and ./airband-src (an RTLSDR-Airband checkout), instead of pulling
+# them. For trying out changes before they are pushed.
+services:
+  rtl-airband:
+    build:
+      context: ./airband-src
+      args:
+        NFM: "FALSE"
+    image: rtl-airband:local
+
+  airband-hub:
+    build: ./src
+    image: airband-hub:local

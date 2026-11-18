@@ -1,6 +1,11 @@
 <h1 align="center">airband-hub</h1>
 
 <p align="center">
+  <a href="https://github.com/ap-andersson/airband-hub/actions/workflows/image.yml"><img src="https://github.com/ap-andersson/airband-hub/actions/workflows/image.yml/badge.svg" alt="Test and build image"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--2.0--or--later-blue" alt="License: GPL-2.0-or-later"></a>
+</p>
+
+<p align="center">
   <strong>Live stream, dashboard and recordings browser for <a href="https://github.com/rtl-airband/RTLSDR-Airband">RTLSDR-Airband</a>.</strong><br>
   One small container in place of Icecast, a stats scraper and a file server.
 </p>
@@ -39,8 +44,8 @@ embedded web UI, and needs no changes to rtl_airband: it speaks the protocols rt
   - A 5-minute detail view.
   - Jump to the previous or next transmission, or **skip silence** to hear only the transmissions back to back.
   - Download any hour.
-- **Light on a Pi.** The hub image is about 13 MB and uses a few MB of RAM. The rtl_airband
-  image built by the stack is 32 MB and runs only `rtl_airband`.
+- **Light on a Pi.** The hub image is about 11 MB and uses a few MB of RAM. The rtl_airband image
+  is 32 MB and runs only `rtl_airband`, where the all-in-one container it replaces was 708 MB.
 
 ## How it fits together
 
@@ -63,17 +68,22 @@ not in an upstream release yet.
 
 ## Quick start
 
-The repository contains a Docker Compose stack with both rtl_airband and the hub. The deploy
-script syncs this repository and an RTLSDR-Airband checkout to the host over ssh, and builds both
-images there, so no registry is needed:
+The repository contains a Docker Compose stack with both rtl_airband and the hub. GitHub Actions
+publishes both images for amd64 and arm64: `ghcr.io/ap-andersson/airband-hub` and
+`ghcr.io/ap-andersson/rtlsdr-airband` (AM only, from the
+[RTLSDR-Airband fork](https://github.com/ap-andersson/RTLSDR-Airband)). The deploy script copies the
+compose files to the host over ssh, pulls the images and starts the stack:
 
 ```bash
 git clone https://github.com/ap-andersson/airband-hub.git
-git clone -b dev/docker_build_options https://github.com/ap-andersson/RTLSDR-Airband.git
 cd airband-hub
-cp deploy.env.example deploy.env   # set DEPLOY_HOST (ssh target), DEPLOY_DIR and AIRBAND_SRC
-scripts/deploy.sh                  # sync, build on the host, start
+cp deploy.env.example deploy.env   # set DEPLOY_HOST (ssh target) and DEPLOY_DIR
+scripts/deploy.sh                  # pull the images, start or update the stack
 ```
+
+To try changes before they are pushed, `scripts/deploy.sh --build` syncs this repository and an
+RTLSDR-Airband checkout (`AIRBAND_SRC` in `deploy.env`) to the host and builds both images there.
+Running it without `--build` goes back to the published images.
 
 The first deploy creates `DEPLOY_DIR/.env` (mode 600) with a random `HUB_SOURCE_PASSWORD`. Set
 `AIRBAND_CONFIG` and `HUB_RECORDINGS_HOST_DIR` in that file, and `COMPOSE_PROFILES=airband` to
@@ -151,12 +161,13 @@ These also go in `DEPLOY_DIR/.env`, and are read by `deploy/compose.yml`:
 | `HUB_HOST_PORT` | `8090` | Host port for the hub |
 | `AIRBAND_METRICS_HOST_PORT` | `8080` | Host port for rtl_airband's `/metrics`, for Prometheus |
 | `HUB_UID`, `HUB_GID` | `1000` | Owner of `data/`, the waveform cache |
+| `AIRBAND_IMAGE`, `HUB_IMAGE` | the `:latest` images on ghcr.io | Other images or tags, e.g. a `:sha-<commit>` to pin a version |
 | `COMPOSE_FILE` | `compose.yml` | `compose.yml:compose.legacy.yml` lets the hub run next to an older rtl_airband container, by joining its network (`AIRBAND_NETWORK`, default `rtlsdr-airband_default`) |
 
-rtl-airband runs as root, because USB device nodes are usually `root:root 0664`. It is built
-with `NFM=FALSE`, because NFM support in rtl_airband also doubles the audio rate to 16 kHz. To
-rebuild after changing rtl_airband's code, run `scripts/deploy.sh` again. The build tree is
-cached, so this takes seconds.
+rtl-airband runs as root, because USB device nodes are usually `root:root 0664`. Its image is
+built with `NFM=FALSE`, because NFM support in rtl_airband also doubles the audio rate to 16 kHz.
+With `--build`, rebuilding after a change to rtl_airband's code takes seconds: the build tree is
+cached between builds.
 
 ## Endpoints
 

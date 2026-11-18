@@ -107,7 +107,8 @@ Prometheus ── scrapes airband /metrics directly
 
 **Next**
 - [ ] **Access control.** Today everything is open. Before the hub is reachable from the internet, the recordings and (later) config editing need a login, or the hub needs a way to limit them to the LAN.
-- [ ] Publish images: GitHub Actions building multi-arch images for ghcr, instead of building on the host.
+- [x] Publish images: GitHub Actions builds both images for amd64 and arm64 on native runners and publishes them to ghcr. The fork's upstream workflows are kept but only run by hand. `deploy.sh` pulls the images, and `--build` still builds on the host.
+- [ ] Store transmission history in SQLite (a file in the data folder, no database server), so the dashboard's history survives restarts and can go back X days.
 - [ ] Pull requests for the two RTLSDR-Airband branches (`dev/metrics_endpoint`, `dev/docker_build_options`, both pushed), first to the fork and maybe upstream later.
 - [ ] Config editing (the end goal): edit `rtl_airband.conf`, starting with the scan list, in the hub. Back it up before writing, then restart (D12).
 - [ ] Check the dashboard at phone width and in light mode.
