@@ -1,18 +1,28 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { Frequency, Live, Mount, Receiver, Transmission } from "./api";
 import { ago, clock, isSet, seconds, snr, stationName } from "./format";
+import { Recordings } from "./Recordings";
+import { Link, useLocation } from "./router";
 import { useLive, type Connection } from "./useLive";
 
 export function App() {
   const { live, connection } = useLive();
+  const url = useLocation();
   const now = live ? new Date(live.time) : new Date();
   const mount = live?.mounts[0];
+  const page = url.pathname.startsWith("/recordings") ? "recordings" : "live";
+
+  useEffect(() => {
+    document.title = page === "recordings" ? "Recordings, airband hub" : "Airband hub";
+  }, [page]);
 
   return (
     <div class="page">
-      <Header mount={mount} connection={connection} now={now} />
+      <Header mount={mount} connection={connection} now={now} page={page} recordingsEnabled={!!live?.recordings_enabled} />
       {live === null ? (
         <p class="empty">{connection === "lost" ? "Cannot reach the hub. Retrying…" : "Connecting to the hub…"}</p>
+      ) : page === "recordings" ? (
+        <Recordings enabled={live.recordings_enabled} url={url} />
       ) : (
         <main>
           <Board live={live} />
@@ -26,10 +36,20 @@ export function App() {
   );
 }
 
-function Header({ mount, connection, now }: { mount?: Mount; connection: Connection; now: Date }) {
+function Header({ mount, connection, now, page, recordingsEnabled }: { mount?: Mount; connection: Connection; now: Date; page: string; recordingsEnabled: boolean }) {
   const name = mount?.info.name || "Airband hub";
   return (
     <header class="header">
+      <nav class="nav" aria-label="Pages">
+        <Link href="/" current={page === "live"}>
+          Live
+        </Link>
+        {recordingsEnabled && (
+          <Link href="/recordings" current={page === "recordings"}>
+            Recordings
+          </Link>
+        )}
+      </nav>
       <div class="station">
         <h1>{name}</h1>
         {mount && isSet(mount.title_updated) ? (

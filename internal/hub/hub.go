@@ -10,6 +10,7 @@ import (
 
 	"github.com/ap-andersson/airband-hub/internal/airband"
 	"github.com/ap-andersson/airband-hub/internal/icecast"
+	"github.com/ap-andersson/airband-hub/internal/recordings"
 	"github.com/ap-andersson/airband-hub/internal/relay"
 )
 
@@ -23,13 +24,16 @@ type Config struct {
 	LiveInterval time.Duration
 	// UI serves the web UI for paths that are not a live mount.
 	UI http.Handler
+	// Recordings serves /api/recordings/...; nil when no recordings directory is configured.
+	Recordings *recordings.Handlers
 }
 
 // Live is what the dashboard shows.
 type Live struct {
-	Time           time.Time      `json:"time"`
-	Mounts         []relay.Status `json:"mounts"`
-	MetricsEnabled bool           `json:"metrics_enabled"`
+	Time              time.Time      `json:"time"`
+	Mounts            []relay.Status `json:"mounts"`
+	MetricsEnabled    bool           `json:"metrics_enabled"`
+	RecordingsEnabled bool           `json:"recordings_enabled"`
 	airband.State
 }
 
@@ -39,6 +43,7 @@ type Live struct {
 //	GET  /api/mounts         JSON status of every mount
 //	GET  /api/live           JSON snapshot for the dashboard
 //	GET  /api/live/stream    the same, pushed every LiveInterval as server-sent events
+//	GET  /api/recordings/... recorded files, waveforms and audio (see recordings.Handlers)
 //	GET  /admin/metadata     Icecast metadata updates (for rtl_airband)
 //	SOURCE|PUT /<mount>      Icecast source push (for rtl_airband)
 //	GET|HEAD /<mount>        live stream for players
@@ -55,13 +60,17 @@ func NewHandler(cfg Config, reg *relay.Registry, log *slog.Logger) http.Handler 
 	}).Register(mux)
 
 	live := func() Live {
-		l := Live{Time: time.Now(), Mounts: reg.List(), MetricsEnabled: cfg.Tracker != nil}
+		l := Live{Time: time.Now(), Mounts: reg.List(), MetricsEnabled: cfg.Tracker != nil, RecordingsEnabled: cfg.Recordings != nil}
 		if cfg.Tracker != nil {
 			l.State = cfg.Tracker.State()
 		} else {
 			l.State = airband.State{Frequencies: []airband.FreqState{}, Recent: []airband.Transmission{}}
 		}
 		return l
+	}
+
+	if cfg.Recordings != nil {
+		cfg.Recordings.Register(mux)
 	}
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

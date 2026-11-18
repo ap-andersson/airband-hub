@@ -17,6 +17,11 @@
   --good: #0ca30c;
   --bad: #d03b3b;
   --focus: #8fc1ff;
+  --wave: #3987e5;
+  --wave-track: #34404b;
+  --wave-hover: #a9b5bf;
+  --tx-band: rgba(240, 168, 48, 0.2);
+  --playhead: #f0a830;
 
   --font-body: "Barlow", system-ui, sans-serif;
   --font-display: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
@@ -41,6 +46,11 @@
     --good: #0b7f0b;
     --bad: #c03030;
     --focus: #1c5cab;
+    --wave: #2a78d6;
+    --wave-track: #c9d2d9;
+    --wave-hover: #4f5d69;
+    --tx-band: rgba(240, 168, 48, 0.28);
+    --playhead: #b86e00;
   }
 }
 
@@ -99,7 +109,41 @@ code {
   color: var(--ink-2);
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* Header */
+
+.nav {
+  flex-basis: 100%;
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+}
+
+.nav a:hover {
+  color: var(--ink);
+}
+
+.nav a[aria-current="page"] {
+  color: var(--ink);
+  background: var(--strip);
+  box-shadow: inset 0 0 0 1px var(--strip-edge);
+}
 
 .header {
   display: flex;
@@ -477,6 +521,298 @@ td {
   overflow-wrap: anywhere;
 }
 
+/* Recordings */
+
+.recordings {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr);
+  gap: 2rem;
+  padding-bottom: 5rem; /* room for the player bar */
+}
+
+.days {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
+}
+
+.hour.quiet {
+  padding-bottom: 0.5rem;
+}
+
+.hour.quiet .hour-head {
+  margin-bottom: 0;
+}
+
+.days h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 0 0 0.25rem;
+}
+
+.days ul {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+.day-link {
+  display: block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.day-link:hover {
+  color: var(--ink);
+  background: var(--strip);
+}
+
+.day-link[aria-current="page"] {
+  color: var(--ink);
+  background: var(--strip);
+  box-shadow: inset 3px 0 0 var(--on-air);
+  font-weight: 600;
+}
+
+.day h2 {
+  margin-bottom: 0.75rem;
+}
+
+.hours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.hour {
+  background: var(--strip);
+  border: 1px solid var(--strip-edge);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem 0.65rem;
+}
+
+.hour.current {
+  border-color: var(--on-air);
+}
+
+.hour-head {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.hour-head h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+  margin: 0;
+  min-width: 6.5rem;
+}
+
+.hour-meta {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.recording-now {
+  color: var(--ink);
+  font-weight: 600;
+  margin-right: 0.75rem;
+}
+
+.download {
+  color: var(--ink-3);
+  font-size: 0.875rem;
+}
+
+.download:hover {
+  color: var(--ink);
+}
+
+.wave {
+  position: relative;
+}
+
+.wave canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.wave.placeholder {
+  border-top: 1px solid var(--wave-track);
+  margin-top: 22px;
+  height: 22px !important;
+}
+
+.wave-label {
+  position: absolute;
+  top: -1.4rem;
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  background: var(--page);
+  color: var(--ink);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.wave-label.left {
+  transform: translateX(-100%);
+}
+
+.detail {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--strip-edge);
+}
+
+.detail-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  margin-top: 0.15rem;
+}
+
+.tx-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tx {
+  font: inherit;
+  font-size: 0.875rem;
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--strip-edge);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.tx:hover {
+  border-color: var(--ink-3);
+}
+
+.tx.current {
+  background: var(--on-air);
+  border-color: var(--on-air);
+  color: var(--on-air-ink);
+}
+
+.tx-len {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.player {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  padding: 0.6rem max(1rem, calc((100vw - 70rem) / 2));
+  background: var(--strip);
+  border-top: 1px solid var(--strip-edge);
+}
+
+.player.idle {
+  color: var(--ink-2);
+}
+
+.player-buttons {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.player-buttons button {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--strip-edge);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.player-buttons button.play {
+  background: var(--on-air);
+  border-color: var(--on-air);
+  color: var(--on-air-ink);
+}
+
+.player-buttons svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.player-where {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.player-where strong {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.player-where .secondary {
+  font-size: 0.85rem;
+}
+
+.skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.skip input {
+  accent-color: var(--on-air);
+  width: 1rem;
+  height: 1rem;
+}
+
+.player-day {
+  font: inherit;
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: var(--ink-2);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Narrow screens */
 
 @media (max-width: 52rem) {
@@ -497,6 +833,42 @@ td {
 
   .lower {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .recordings {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  /* days become one scrollable row */
+  .days {
+    position: static;
+    max-height: none;
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+
+  .days .month {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: none;
+  }
+
+  .days ul {
+    display: flex;
+    margin: 0;
+  }
+
+  .day-link {
+    white-space: nowrap;
+  }
+
+  .hour-head {
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
   }
 }
 

@@ -55,7 +55,38 @@ export interface Live {
   time: string;
   mounts: Mount[];
   metrics_enabled: boolean;
+  recordings_enabled: boolean;
   receiver: Receiver;
   frequencies: Frequency[];
   recent: Transmission[];
+}
+
+// /api/recordings
+
+export interface Recording {
+  path: string;
+  name: string;
+  start: string;
+  freq?: string;
+  size: number;
+  modified: string;
+  growing: boolean;
+}
+
+export interface Day {
+  date: string; // YYYY-MM-DD in the viewer's time zone
+  count: number;
+}
+
+export interface Segment {
+  start: number; // seconds from the start of the recording
+  end: number;
+}
+
+export interface Waveform {
+  duration: number;
+  sample_rate: number;
+  peaks_per_second: number;
+  peaks: string; // base64, one byte per bucket: 0 = below -60 dBFS, 1..255 = -60..0 dBFS
+  transmissions: Segment[];
 }

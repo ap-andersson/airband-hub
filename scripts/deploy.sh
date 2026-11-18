@@ -10,8 +10,10 @@
 #   compose.yml  copy of deploy/compose.yml
 #   .env         HUB_* settings. Created on first deploy with a random
 #                HUB_SOURCE_PASSWORD, never overwritten, readable only by its owner.
-#                Optional in it: HUB_HOST_PORT (default 8090) and AIRBAND_NETWORK
-#                (default rtlsdr-airband_default).
+#                Optional in it: HUB_HOST_PORT (default 8090), AIRBAND_NETWORK
+#                (default rtlsdr-airband_default), HUB_RECORDINGS_HOST_DIR (rtl_airband's
+#                recordings folder on the host) and HUB_UID/HUB_GID (owner of data/, default 1000).
+#   data/        the waveform cache
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,7 +24,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "==> Syncing to ${DEPLOY_HOST}:${DEPLOY_DIR}"
 # shellcheck disable=SC2029  # DEPLOY_DIR is local config, meant to expand here
-ssh "${DEPLOY_HOST}" "mkdir -p '${DEPLOY_DIR}/src'"
+ssh "${DEPLOY_HOST}" "mkdir -p '${DEPLOY_DIR}/src' '${DEPLOY_DIR}/data' '${DEPLOY_DIR}/recordings'"
 rsync -a --delete --exclude '.git/' --exclude 'bin/' --exclude 'deploy.env' --exclude 'web/node_modules/' \
 	"${REPO}/" "${DEPLOY_HOST}:${DEPLOY_DIR}/src/"
 rsync -a "${REPO}/deploy/compose.yml" "${DEPLOY_HOST}:${DEPLOY_DIR}/compose.yml"

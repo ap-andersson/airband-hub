@@ -6,12 +6,14 @@ COPY web/ ./
 RUN npm run build
 
 FROM golang:1.26-alpine AS build
+# minimp3 (C, via cgo) decodes the 8 kHz MPEG-2.5 recordings; link statically for distroless
+RUN apk add --no-cache gcc musl-dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/airband-hub ./cmd/airband-hub
+RUN CGO_ENABLED=1 go build -trimpath -ldflags='-s -w -linkmode external -extldflags "-static"' -o /out/airband-hub ./cmd/airband-hub
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/airband-hub /airband-hub

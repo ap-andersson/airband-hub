@@ -6,8 +6,9 @@ from [docker-rtlsdrairband](https://github.com/ap-andersson/docker-rtlsdrairband
 container: a live stream that still plays in VLC and browsers, a dashboard, and a recordings
 browser with a waveform view.
 
-**Status: early work in progress.** Today it relays the live stream and has a live dashboard:
-levels and squelch per frequency, recent transmissions, receiver health. See [PLAN.md](PLAN.md)
+**Status: early work in progress.** Today it relays the live stream, has a live dashboard
+(levels and squelch per frequency, recent transmissions, receiver health) and a recordings
+browser (a waveform per recorded hour, transmissions found automatically, play from any point). See [PLAN.md](PLAN.md)
 for the design, decisions and what comes next.
 
 ## How it works
@@ -35,6 +36,7 @@ outputs: (
 | `GET /` | The dashboard |
 | `GET /<mount>` | Live MP3 stream, e.g. `http://host:8000/essl.mp3` in VLC or a browser |
 | `GET /api/live` | JSON snapshot behind the dashboard; `/api/live/stream` pushes it every second (server-sent events) |
+| `GET /api/recordings/...` | Days, recordings, waveforms, audio from an exact time, downloads (see `internal/recordings/handlers.go`) |
 | `GET /api/mounts` | JSON: mounts, current frequency (title), listeners, source state |
 | `GET /healthz` | Liveness |
 
@@ -50,6 +52,10 @@ outputs: (
 | `HUB_MOUNT_GRACE` | `30s` | Keep listeners connected this long while the source reconnects |
 | `HUB_METRICS_URL` | (unset) | rtl_airband's `metrics_listen` endpoint, e.g. `http://rtlsdrairband:9101/metrics`. Without it the dashboard shows only the stream. |
 | `HUB_METRICS_INTERVAL` | `1s` | How often to read it |
+| `HUB_RECORDINGS_DIR` | (unset) | rtl_airband's file output folder, mounted read-only. Without it there is no recordings page. |
+| `HUB_RECORDINGS_LOCALTIME` | `false` | `true` if rtl_airband runs with `localtime = true`, so file names are in `TZ` instead of UTC |
+| `HUB_DATA_DIR` | (unset) | Writable folder for the waveform cache (about 6 KB per recorded hour). Without it waveforms are only kept in memory and older recordings are not analysed ahead of time. |
+| `HUB_BACKFILL_PAUSE` | `1s` | Pause between analysing older recordings in the background |
 | `HUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
 ## Deploying to a host without a registry
@@ -68,6 +74,18 @@ On the first deploy it creates `DEPLOY_DIR/.env` (mode 600) with a random
 settings, `HUB_HOST_PORT` (default 8090) and `AIRBAND_NETWORK` (rtl_airband's Docker network,
 default `rtlsdr-airband_default`) go in the same file.
 
+## Recordings
+
+The recordings page reads rtl_airband's `file` outputs (`<template>_YYYYMMDD_HH.mp3` hourly, or
+the split-on-transmission names). Each file is decoded once with
+[minimp3](https://github.com/lieff/minimp3) (vendored, public domain; it handles the 8 kHz
+MPEG-2.5 files that pure-Go decoders do not) into a peak envelope, and stretches with sound
+become transmission markers. Playback starts at an exact MP3 frame from a frame index, because
+seeking through the files' own VBR seek table lands 5 to 15 s off.
+
+With `HUB_DATA_DIR` set, every finished recording is analysed in the background, newest first.
+On a Raspberry Pi 4 that is about 40 hours of recordings a minute on one core.
+
 ## Development
 
 The UI is Preact + TypeScript + Vite in `web/`. It is built into `web/dist` and embedded in
@@ -76,7 +94,7 @@ the Go binary, so build it before the binary:
 ```bash
 (cd web && npm ci && npm run build)
 go test -race ./...
-go build -o bin/airband-hub ./cmd/airband-hub
+go build -o bin/airband-hub ./cmd/airband-hub   # needs a C compiler (cgo, for minimp3)
 docker build -t airband-hub .
 ```
 

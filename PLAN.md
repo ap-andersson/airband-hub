@@ -169,13 +169,33 @@ Implemented 2026-11-18 on branch `dev/metrics_endpoint`. Not committed yet.
   - Design: each frequency is shown as a "flight progress strip" with a level meter (noise floor band, signal bar, squelch tick on a -60 to 0 dBFS scale). The strip lights up amber while its squelch is open.
   - Previewed in Chrome with real metrics and with fake on-air data.
   - **Not yet checked:** the layout at phone width (it stacks below 52rem) and light mode.
-- [ ] Recordings browser:
-  - list by date
-  - exact frame index and waveform peaks per file (decode in Go), cached and backfilled in the background
-  - wavesurfer.js view with zoom
-  - click to play: the hub serves audio from the exact frame (see Findings)
-  - automatic transmission markers worked out from the peaks
-  - show the growing current-hour `.tmp` file
+- [x] Recordings browser (2026-11-18), at `/recordings`:
+  - `internal/mp3`:
+    - Decoding: pure-Go go-mp3 cannot read 8 kHz (MPEG-2.5), so minimp3 is vendored and called per frame via cgo. One hour decodes in 0.2 s on the laptop and ~0.5-1.5 s on the Pi.
+    - A pure-Go frame scanner builds the exact frame index. It skips the Xing frame, resyncs after garbage and handles appended sessions and truncated `.tmp` files.
+    - The decoder also skips the Xing frame, so waveform and playback share one timeline (they used to be 72 ms apart).
+  - `internal/recordings`:
+    - Lists the files (names parsed, UTC unless `HUB_RECORDINGS_LOCALTIME`).
+    - Analyses each file into 10 peaks/s on a -60..0 dBFS byte scale, plus transmissions (sound above -60 dBFS, gaps < 1.5 s merged, < 0.3 s dropped).
+    - Caches results gzipped in `HUB_DATA_DIR` (~6 KB/h) and backfills newest first.
+    - Serves audio from an exact frame (`ServeContent`, with range support).
+    - Groups days in the viewer's time zone (`?tz=`, tzdata embedded).
+    - File access goes through `os.Root`.
+  - UI:
+    - A day list.
+    - A row per hour with an overview waveform, loaded lazily; quiet hours collapse to one line.
+    - Clicking near a transmission starts it 0.3 s early.
+    - A 5-minute detail view and a list of transmission chips.
+    - A player bar: previous/next transmission (Alt+arrows), Space to play/pause, and **Skip silence**, which jumps to the next transmission.
+    - The waveform is drawn as the square root of linear amplitude, so speech has shape and distant signals still show.
+  - The image is now 13.2 MB: static cgo build, a gcc stage, still distroless.
+  - On the Pi: `~/rtlsdr-airband/recording` is mounted read-only, the cache is in `~/airband-hub/data`, and the container runs as uid 1000. The backfill does ~40 files/min, so the 16,471 recordings take ~7 h. It uses ~47% of one core, with no rtl_airband overruns.
+  - Previewed in Chrome on two real days: playback, snapping, detail view and skip silence all work.
+  - **Ideas for later:**
+    - continue into the next hour when a file ends
+    - zoom by dragging
+    - a day-wide "transmissions only" playlist
+    - bookmarks
 - [ ] Replace the `airband-nginx` container.
 
 ### Phase 4: later / maybe

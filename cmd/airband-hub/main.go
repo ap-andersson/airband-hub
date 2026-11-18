@@ -12,6 +12,13 @@
 //	HUB_METRICS_URL      rtl_airband's metrics endpoint, e.g. http://rtlsdrairband:9101/metrics.
 //	                     Without it the dashboard shows only the stream.
 //	HUB_METRICS_INTERVAL how often to read it (default 1s)
+//	HUB_RECORDINGS_DIR   the directory rtl_airband's file outputs write to, mounted read-only.
+//	                     Without it there is no recordings browser.
+//	HUB_RECORDINGS_LOCALTIME  true if rtl_airband runs with localtime = true, so file names
+//	                     are in the TZ time zone rather than UTC (default false)
+//	HUB_DATA_DIR         a writable directory for the waveform cache. Without it waveforms
+//	                     are kept in memory only and old recordings are not analysed ahead.
+//	HUB_BACKFILL_PAUSE   pause between analysing older recordings in the background (default 1s)
 //	HUB_LOG_LEVEL        debug, info, warn or error (default info)
 package main
 
@@ -29,6 +36,7 @@ import (
 
 	"github.com/ap-andersson/airband-hub/internal/airband"
 	"github.com/ap-andersson/airband-hub/internal/hub"
+	"github.com/ap-andersson/airband-hub/internal/recordings"
 	"github.com/ap-andersson/airband-hub/internal/relay"
 	"github.com/ap-andersson/airband-hub/web"
 )
@@ -97,6 +105,26 @@ func run() error {
 		log.Info("HUB_METRICS_URL not set; the dashboard shows only the stream")
 	}
 
+	var recs *recordings.Handlers
+	if dir := os.Getenv("HUB_RECORDINGS_DIR"); dir != "" {
+		loc := time.UTC
+		if env("HUB_RECORDINGS_LOCALTIME", "false") == "true" {
+			loc = time.Local
+		}
+		lib, err := recordings.NewLibrary(dir, loc)
+		if err != nil {
+			return fmt.Errorf("HUB_RECORDINGS_DIR: %w", err)
+		}
+		pause, err := envDuration("HUB_BACKFILL_PAUSE", time.Second)
+		if err != nil {
+			return err
+		}
+		analyzer := &recordings.Analyzer{Library: lib, DataDir: os.Getenv("HUB_DATA_DIR"), Log: log}
+		recs = &recordings.Handlers{Library: lib, Analyzer: analyzer, Log: log}
+		go analyzer.Backfill(ctx, pause)
+		log.Info("serving recordings", "dir", dir, "names_in", loc.String(), "cache", analyzer.DataDir)
+	}
+
 	reg := relay.NewRegistry(relay.Options{BurstBytes: burst, Grace: grace})
 	srv := &http.Server{
 		Addr: env("HUB_LISTEN", ":8000"),
@@ -107,6 +135,7 @@ func run() error {
 			Tracker:        tracker,
 			LiveInterval:   time.Second,
 			UI:             web.Handler(),
+			Recordings:     recs,
 		}, reg, log),
 		// no write timeout: listener streams never end
 		ReadHeaderTimeout: 10 * time.Second,

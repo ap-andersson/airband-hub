@@ -8,6 +8,16 @@ services:
     restart: unless-stopped
     # HUB_SOURCE_PASSWORD and other HUB_* settings; created by deploy.sh on first deploy
     env_file: .env
+    environment:
+      HUB_RECORDINGS_DIR: /recordings
+      HUB_DATA_DIR: /data
+    # the user that owns ./data; recordings only need to be readable
+    user: "${HUB_UID:-1000}:${HUB_GID:-1000}"
+    volumes:
+      # rtl_airband's file output folder (read-only); an empty ./recordings when not set
+      - ${HUB_RECORDINGS_HOST_DIR:-./recordings}:/recordings:ro
+      # waveform cache
+      - ./data:/data
     ports:
       - "${HUB_HOST_PORT:-8090}:8000"
     networks:
