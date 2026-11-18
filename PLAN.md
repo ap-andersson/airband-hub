@@ -136,15 +136,23 @@ Implemented 2026-11-18 on branch `dev/metrics_endpoint`. Not committed yet.
   - `compose.legacy.yml` keeps the hub on the old container's network until then.
   - This replaces the old "sync source and recompile on start" dev loop.
 - [x] The image was built on the Pi 2026-11-18 (`v7.0.1-10-g40ae6ec`), but it is not running yet.
-- [ ] **Switch-over** (port 80 to the hub, rtl-airband takes the SDR), with a backup of the config and `.env` first:
+- [x] **Switch-over done 2026-11-18 ~21:50 CET** (port 80 to the hub, rtl-airband takes the SDR), with a backup of the config and `.env` first:
   1. Remove the Icecast output (127.0.0.1:80) from `~/rtlsdr-airband/config/rtl_airband.conf`.
   2. In `~/airband-hub/.env`:
      - remove `COMPOSE_FILE` and `HUB_METRICS_URL`
      - add `COMPOSE_PROFILES=airband`, `AIRBAND_CONFIG=/home/pi/rtlsdr-airband/config/rtl_airband.conf` and `HUB_HOST_PORT=80`
-  3. `docker compose stop rtlsdirairband` in `~/rtlsdr-airband`. Stop, not remove, so it can come back.
+  3. `docker compose down` in `~/rtlsdr-airband`, as Andreas chose. This also removed `airband-nginx`; both can be recreated with `up -d` there.
   4. `docker compose up -d --remove-orphans` in `~/airband-hub`.
-  5. Rollback: stop the new stack's rtl-airband, restore the backups, start the old container.
-- [ ] Later: stop `airband-nginx` (port 8081) and retire `~/rtlsdr-airband/docker-compose.yml`.
+  5. Rollback: `docker compose stop rtl-airband` and restore `HUB_HOST_PORT` in `~/airband-hub`, restore `config/rtl_airband.conf.pre-switch` and `.env.pre-switch`, then `docker compose up -d` in `~/rtlsdr-airband`.
+
+  Checked after the switch:
+  - the dongle is found
+  - recording continues in the current hour's file
+  - the hub gets the stream and metrics
+  - `:80/essl.mp3` and the dashboard work over the LAN
+  - `:8080/metrics` is scraped by VictoriaMetrics (`up` = 1)
+  - no overruns
+- [ ] Later, once the new setup has proven itself: remove `~/rtlsdr-airband/docker-compose.yml` (old), `src-rtlsdr-airband/`, `src-docker/`, `icecast.xml` and the old images.
 
 ### Phase 3: airband-hub MVP
 - [x] Go module skeleton (`github.com/ap-andersson/airband-hub`).
