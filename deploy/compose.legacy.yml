@@ -1,0 +1,13 @@
+# For running the hub next to an older rtl_airband container (e.g. docker-rtlsdrairband)
+# that owns the SDR: joins that container's network so its icecast output can reach
+# server = "airband-hub". Enable with COMPOSE_FILE=compose.yml:compose.legacy.yml in .env.
+services:
+  airband-hub:
+    networks:
+      - default
+      - legacy
+
+networks:
+  legacy:
+    external: true
+    name: ${AIRBAND_NETWORK:-rtlsdr-airband_default}

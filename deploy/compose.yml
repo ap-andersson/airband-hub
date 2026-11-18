@@ -1,6 +1,35 @@
-# Compose file used on the deploy host by scripts/deploy.sh. It builds the image from the
-# source synced to ./src, so no registry is needed.
+# The airband stack: rtl_airband (owns the SDR) and airband-hub (stream, dashboard,
+# recordings). Used on the deploy host by scripts/deploy.sh, which syncs both sources and
+# builds the images there, so no registry is needed. Settings come from .env next to it.
 services:
+  rtl-airband:
+    build:
+      context: ./airband-src
+      args:
+        # AM airband only: NFM support would also double the audio rate to 16 kHz
+        NFM: "FALSE"
+    image: rtl-airband:local
+    container_name: rtl-airband
+    restart: unless-stopped
+    # starts only with COMPOSE_PROFILES=airband in .env, so its image can be built while
+    # another container still owns the SDR
+    profiles: ["airband"]
+    device_cgroup_rules:
+      - "c 189:* rwm"
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb:ro
+      - ${AIRBAND_CONFIG:-./rtl_airband.conf}:/app/rtl_airband.conf:ro
+      # where the config's file outputs write (directory = "/recording")
+      - ${HUB_RECORDINGS_HOST_DIR:-./recordings}:/recording
+    ports:
+      # metrics_listen = "0.0.0.0:9101" in the config; Prometheus scrapes this port
+      - "${AIRBAND_METRICS_HOST_PORT:-8080}:9101"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9101/metrics"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+
   airband-hub:
     build: ./src
     image: airband-hub:local
@@ -11,21 +40,12 @@ services:
     environment:
       HUB_RECORDINGS_DIR: /recordings
       HUB_DATA_DIR: /data
+      HUB_METRICS_URL: ${HUB_METRICS_URL:-http://rtl-airband:9101/metrics}
     # the user that owns ./data; recordings only need to be readable
     user: "${HUB_UID:-1000}:${HUB_GID:-1000}"
     volumes:
-      # rtl_airband's file output folder (read-only); an empty ./recordings when not set
       - ${HUB_RECORDINGS_HOST_DIR:-./recordings}:/recordings:ro
       # waveform cache
       - ./data:/data
     ports:
       - "${HUB_HOST_PORT:-8090}:8000"
-    networks:
-      - default
-      - airband
-
-networks:
-  # rtl_airband's network, so its icecast output can use server = "airband-hub"
-  airband:
-    external: true
-    name: ${AIRBAND_NETWORK:-rtlsdr-airband_default}

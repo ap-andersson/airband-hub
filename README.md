@@ -60,19 +60,35 @@ outputs: (
 
 ## Deploying to a host without a registry
 
-`scripts/deploy.sh` syncs this repository to a host over ssh, builds the image there and
-restarts the container with `deploy/compose.yml`:
+`deploy/compose.yml` is the whole stack: **rtl-airband** (built from an
+[RTLSDR-Airband](https://github.com/ap-andersson/RTLSDR-Airband) checkout; only it touches the
+SDR) and **airband-hub**. `scripts/deploy.sh` syncs this repository and that checkout to a host
+over ssh, builds both images there and restarts the stack:
 
 ```bash
-cp deploy.env.example deploy.env   # once: DEPLOY_HOST (ssh target) and DEPLOY_DIR
+cp deploy.env.example deploy.env   # once: DEPLOY_HOST (ssh target), DEPLOY_DIR, AIRBAND_SRC
 scripts/deploy.sh                  # sync, build on the host, restart
 scripts/deploy.sh --logs           # the same, then follow the logs
 ```
 
 On the first deploy it creates `DEPLOY_DIR/.env` (mode 600) with a random
-`HUB_SOURCE_PASSWORD`. Put that password in rtl_airband's `icecast` output. Other `HUB_*`
-settings, `HUB_HOST_PORT` (default 8090) and `AIRBAND_NETWORK` (rtl_airband's Docker network,
-default `rtlsdr-airband_default`) go in the same file.
+`HUB_SOURCE_PASSWORD`; rtl_airband's `icecast` output to the hub uses that password with
+`server = "airband-hub"`, `port = 8000`. Other settings in the same file:
+
+| Setting | Default | |
+|---|---|---|
+| `COMPOSE_PROFILES` | (unset) | `airband` starts rtl-airband. Leave it unset while another container owns the SDR; the image is still built. |
+| `AIRBAND_CONFIG` | `./rtl_airband.conf` | rtl_airband's config on the host. It needs `metrics_listen = "0.0.0.0:9101";`. |
+| `HUB_RECORDINGS_HOST_DIR` | `./recordings` | Where the config's file outputs write; mounted at `/recording` for rtl_airband and read-only for the hub |
+| `HUB_HOST_PORT` | `8090` | Host port for the hub (stream, dashboard) |
+| `AIRBAND_METRICS_HOST_PORT` | `8080` | Host port for rtl_airband's `/metrics`, for Prometheus |
+| `HUB_UID`, `HUB_GID` | `1000` | Owner of `data/`, the hub's waveform cache |
+| `COMPOSE_FILE` | `compose.yml` | `compose.yml:compose.legacy.yml` lets the hub reach an older rtl_airband container's network (`AIRBAND_NETWORK`, default `rtlsdr-airband_default`) |
+| `HUB_*` | | Any hub setting from the table above |
+
+rtl-airband runs as root, because the USB device nodes are `root:root 0664`, and is built
+with `NFM=FALSE`, since NFM support would also double the audio rate to 16 kHz.
+Rebuilding after a source change takes seconds: the build tree is cached between builds.
 
 ## Recordings
 
