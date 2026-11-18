@@ -157,7 +157,8 @@ Implemented 2026-11-18 on branch `dev/metrics_endpoint`. Not committed yet.
     - a 10 s stream over the LAN
     - 0.1% CPU and 7 MB RAM
     - reconnects after both a hub restart and an rtl_airband restart
-- [ ] Optional ICY metadata so VLC shows the current frequency.
+- [x] ICY metadata (2026-11-18). Players that send `Icy-MetaData: 1` (VLC) get `StreamTitle` every 8192 bytes (~1.4 s), so VLC shows the frequency of the latest transmission.
+- [x] Lower latency: the burst default is now 0. With the old 24 KB burst, listeners stayed ~4 s behind live, more than the Icecast on the Pi (`burst-size 0`).
 - [x] Live dashboard (2026-11-18), at `/` on the hub:
   - The UI is Preact + TypeScript + Vite in `web/`, the same stack as sky-history, embedded in the binary with `go:embed`. The image went from 9.4 to 10.7 MB.
   - `internal/airband` reads `HUB_METRICS_URL` every second (on the Pi: `http://rtlsdrairband:9101/metrics`). From the counters it derives:
@@ -237,6 +238,8 @@ It is the Icecast 2 "SOURCE" protocol, **not PUT**:
 - **Silent after connecting:** rtl_airband connects its outputs before the dongle is running and sends no
   audio for ~10 s. With a 10 s source timeout the hub dropped it and rtl_airband reconnected 10 s
   later, so the default timeout is now 30 s.
+- **The title only exists after a transmission:** it is kept in memory, so a hub restart clears it until rtl_airband sends the next one.
+  A possible improvement: when the dashboard's metrics show squelch opening on a frequency, set the title from that.
 - **The title is the frequency of the latest transmission, not the frequency being scanned.** rtl_airband sends a
   tag only when squelch opens on a different frequency from the last active one
   (`src/rtl_airband.cpp:171`). So it is empty after a restart until the first transmission. The

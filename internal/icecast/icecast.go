@@ -9,9 +9,11 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -168,6 +170,12 @@ func (h *Handler) serveListener(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var out io.Writer = w
+	if r.Header.Get("Icy-MetaData") == "1" {
+		hdr.Set("icy-metaint", strconv.Itoa(icyMetaint))
+		out = newICYWriter(w, icyMetaint, m.Title)
+	}
+
 	l := m.Subscribe()
 	defer m.Unsubscribe(l)
 	rc := http.NewResponseController(w)
@@ -184,7 +192,7 @@ func (h *Handler) serveListener(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			rc.SetWriteDeadline(time.Now().Add(30 * time.Second))
-			if _, err := w.Write(chunk); err != nil {
+			if _, err := out.Write(chunk); err != nil {
 				return
 			}
 			if err := rc.Flush(); err != nil {

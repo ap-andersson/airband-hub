@@ -141,6 +141,12 @@ type Mount struct {
 
 func (m *Mount) Name() string { return m.name }
 
+func (m *Mount) Title() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.title
+}
+
 func (m *Mount) Info() StreamInfo {
 	m.mu.Lock()
 	defer m.mu.Unlock()

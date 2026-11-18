@@ -5,7 +5,8 @@
 //	HUB_LISTEN           address to listen on (default ":8000")
 //	HUB_SOURCE_PASSWORD  password rtl_airband's icecast output uses (required)
 //	HUB_SOURCE_USER      username for it (default "source")
-//	HUB_BURST_BYTES      recent stream sent to a new listener at once (default 24576, ~4 s at 48 kbps)
+//	HUB_BURST_BYTES      recent stream sent to a new listener at once (default 0). Players stay
+//	                     this far behind live for the whole session: 24576 is ~4 s at 48 kbps.
 //	HUB_SOURCE_TIMEOUT   drop a source that sends nothing this long (default 30s; rtl_airband
 //	                     sends no audio for ~10 s after connecting while the dongle starts)
 //	HUB_MOUNT_GRACE      keep listeners this long after the source drops (default 30s)
@@ -74,7 +75,7 @@ func run() error {
 	if password == "" {
 		return errors.New("HUB_SOURCE_PASSWORD must be set")
 	}
-	burst, err := strconv.Atoi(env("HUB_BURST_BYTES", "24576"))
+	burst, err := strconv.Atoi(env("HUB_BURST_BYTES", "0"))
 	if err != nil || burst < 0 {
 		return errors.New("HUB_BURST_BYTES must be a non-negative number")
 	}
