@@ -221,4 +221,8 @@ running hub, set with `HUB_URL`, e.g. `HUB_URL=http://raspberrypi.local:8090 npm
 
 ## License
 
-LICENSE_PLACEHOLDER
+airband-hub is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, either version 2 of the
+License, or (at your option) any later version (`GPL-2.0-or-later`). See [LICENSE](LICENSE).
+
+The vendored [minimp3](https://github.com/lieff/minimp3) in `internal/mp3/minimp3.h` is public domain (CC0).
