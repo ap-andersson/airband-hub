@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <img src="docs/dashboard.jpg" alt="The live dashboard: one strip per scanned frequency with a level meter, recent transmissions and receiver health" width="49%">
-  <img src="docs/recordings.jpg" alt="The recordings browser: a waveform per recorded hour, with the day list on the left" width="49%">
+  <img src="docs/dashboard.jpg" alt="The live dashboard: one strip per scanned frequency with a level meter, recent transmissions grouped per frequency, and receiver health" width="49%">
+  <img src="docs/recordings.jpg" alt="The recordings browser: a waveform per recorded hour, one hour opened in the detail view with its transmissions, a bookmark flag, and the player bar" width="49%">
 </p>
 
 ---
@@ -74,27 +74,64 @@ not in an upstream release yet.
 
 ## Quick start
 
+You need:
+
+- a Linux host with Docker and Docker Compose v2, e.g. a Raspberry Pi 4 (arm64) or a PC (amd64)
+- an RTL-SDR dongle on that host
+- an `rtl_airband.conf` for your frequencies
+
 The repository contains a Docker Compose stack with both rtl_airband and the hub. GitHub Actions
 publishes both images for amd64 and arm64: `ghcr.io/ap-andersson/airband-hub` and
 `ghcr.io/ap-andersson/rtlsdr-airband` (AM only, from the
-[RTLSDR-Airband fork](https://github.com/ap-andersson/RTLSDR-Airband)). The deploy script copies the
-compose files to the host over ssh, pulls the images and starts the stack:
+[RTLSDR-Airband fork](https://github.com/ap-andersson/RTLSDR-Airband)).
+
+### 1. Put the stack on the host
+
+**With the deploy script** (from another machine, over ssh). It copies the compose files to the
+host, creates `.env` with a random `HUB_SOURCE_PASSWORD` the first time, pulls the images and
+starts the stack. Run it again to update.
 
 ```bash
 git clone https://github.com/ap-andersson/airband-hub.git
 cd airband-hub
 cp deploy.env.example deploy.env   # set DEPLOY_HOST (ssh target) and DEPLOY_DIR
-scripts/deploy.sh                  # pull the images, start or update the stack
+scripts/deploy.sh
 ```
 
 To try changes before they are pushed, `scripts/deploy.sh --build` syncs this repository and an
 RTLSDR-Airband checkout (`AIRBAND_SRC` in `deploy.env`) to the host and builds both images there.
 Running it without `--build` goes back to the published images.
 
-The first deploy creates `DEPLOY_DIR/.env` (mode 600) with a random `HUB_SOURCE_PASSWORD`. Set
-`AIRBAND_CONFIG` and `HUB_RECORDINGS_HOST_DIR` in that file, and `COMPOSE_PROFILES=airband` to
-start rtl_airband (see [Stack settings](#stack-settings)). In your `rtl_airband.conf`, enable the
-metrics endpoint and point an `icecast` output at the hub:
+**By hand**, on the host itself:
+
+```bash
+mkdir -p ~/airband-hub/data ~/airband-hub/recordings && cd ~/airband-hub
+curl -fsSLO https://raw.githubusercontent.com/ap-andersson/airband-hub/main/deploy/compose.yml
+printf 'HUB_SOURCE_PASSWORD=%s\n' "$(openssl rand -hex 16)" > .env && chmod 600 .env
+```
+
+The hub runs as uid/gid 1000 and writes to `data/`, so that folder must belong to that user (or
+set `HUB_UID`/`HUB_GID`).
+
+### 2. Fill in `.env`
+
+Next to `compose.yml`. A typical one:
+
+```bash
+HUB_SOURCE_PASSWORD=...                    # created above; rtl_airband's icecast output uses it
+COMPOSE_PROFILES=airband                   # start rtl_airband too
+AIRBAND_CONFIG=/home/pi/rtl_airband.conf   # your config
+HUB_RECORDINGS_HOST_DIR=/home/pi/recordings
+HUB_HOST_PORT=80
+HUB_TITLE=My airband                       # optional; else the stream's name
+HUB_ADMIN_PASSPHRASE=...                   # needed to add, rename or delete bookmarks
+```
+
+All settings are listed under [Configuration](#configuration).
+
+### 3. Point rtl_airband at the hub
+
+In your `rtl_airband.conf`, enable the metrics endpoint and point an `icecast` output at the hub:
 
 ```
 metrics_listen = "0.0.0.0:9101";
@@ -127,7 +164,22 @@ devices: ({
 });
 ```
 
-Then open `http://<host>:8090/` for the dashboard, or play `http://<host>:8090/atc.mp3` in VLC.
+### 4. Start it
+
+```bash
+docker compose up -d     # the deploy script does this for you
+```
+
+Then open `http://<host>:8090/` for the dashboard (or the `HUB_HOST_PORT` you chose), or play
+`http://<host>:8090/atc.mp3` in VLC.
+
+Two things to know:
+
+- The browser player runs about half a second behind the receiver, but only on https (or
+  localhost); over plain http browsers fall back to their own buffering, 5 to 20 s behind. Put
+  the hub behind a reverse proxy with https if you want that, or, in Firefox, add the host to
+  `dom.securecontext.allowlist` in `about:config`.
+- Back up `data/hub.db`: it holds your bookmarks. The rest of `data/` is a cache.
 
 > [!NOTE]
 > Viewing and listening are open to anyone who can reach the hub: the dashboard, the live
@@ -170,7 +222,7 @@ These also go in `DEPLOY_DIR/.env`, and are read by `deploy/compose.yml`:
 | `HUB_RECORDINGS_HOST_DIR` | `./recordings` | Where the config's file outputs write. rtl_airband sees it as `/recording`; the hub reads it read-only. |
 | `HUB_HOST_PORT` | `8090` | Host port for the hub |
 | `AIRBAND_METRICS_HOST_PORT` | `8080` | Host port for rtl_airband's `/metrics`, for Prometheus |
-| `HUB_UID`, `HUB_GID` | `1000` | Owner of `data/`, the waveform cache |
+| `HUB_UID`, `HUB_GID` | `1000` | The user the hub runs as; it must own `data/` |
 | `AIRBAND_IMAGE`, `HUB_IMAGE` | the `:latest` images on ghcr.io | Other images or tags, e.g. a `:sha-<commit>` to pin a version |
 | `COMPOSE_FILE` | `compose.yml` | `compose.yml:compose.legacy.yml` lets the hub run next to an older rtl_airband container, by joining its network (`AIRBAND_NETWORK`, default `rtlsdr-airband_default`) |
 

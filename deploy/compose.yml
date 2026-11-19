@@ -40,7 +40,7 @@ services:
     user: "${HUB_UID:-1000}:${HUB_GID:-1000}"
     volumes:
       - ${HUB_RECORDINGS_HOST_DIR:-./recordings}:/recordings:ro
-      # waveform cache
+      # hub.db (bookmarks, transmission history), session.key (logins) and the waveform cache
       - ./data:/data
     ports:
       - "${HUB_HOST_PORT:-8090}:8000"

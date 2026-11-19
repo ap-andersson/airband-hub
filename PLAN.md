@@ -120,16 +120,18 @@ Prometheus ── scrapes airband /metrics directly
 - [x] Publish images: GitHub Actions builds both images for amd64 and arm64 on native runners and publishes them to ghcr. The fork's upstream workflows are kept but only run by hand. `deploy.sh` pulls the images, and `--build` still builds on the host.
 - [x] Store the transmission history in SQLite too (`hub.db`, D13): the last 36 hours, loaded back on start, so the dashboard's history survives restarts.
 - [ ] Show more of the stored history than the 50 most recent transmissions (per frequency, per hour).
-- [ ] Pull requests for the two RTLSDR-Airband branches (`dev/metrics_endpoint`, `dev/docker_build_options`, both pushed), first to the fork and maybe upstream later.
+- [ ] Offer the metrics endpoint upstream (now on the fork's main) as a pull request to RTLSDR-Airband.
 - [ ] Config editing (the end goal): edit `rtl_airband.conf`, starting with the scan list, in the hub. Back it up before writing, then restart (D12).
 - [ ] Check the dashboard at phone width and in light mode.
+- [x] New screenshots for the README.
 
 **Ideas**
 - Set the title from the metrics when squelch opens, so it survives hub restarts and updates on every transmission
 - Continue playback into the next hour
 - Zoom the waveform by dragging
 - A whole-day "transmissions only" playlist
-- A low-latency path: `udp_stream` PCM sent to the browser over WebSocket
+- A cap on live listeners, so a busy link cannot starve the Pi
+- Build the rtl_airband image against the RTL-SDR Blog driver fork, and include `rtl_test`
 - The hub's own metrics (listeners, relay health)
 
 ## Findings
