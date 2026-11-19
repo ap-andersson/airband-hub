@@ -383,6 +383,15 @@ export function PlayerBar({ hint, bookmarksEnabled, mount }: { hint: string | nu
           {state.status === "error" ? state.error : loading ? "Loading…" : dayFmt.format(when)}
         </span>
       </div>
+      {bookmarksEnabled && !saved && (
+        // phones: the bookmark link becomes this icon, next to the time
+        <button type="button" class="bookmark-icon" aria-expanded={adding} onClick={() => setAdding(!adding)} title="Add bookmark">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M4.5 2.5h7v11L8 11l-3.5 2.5z" />
+          </svg>
+          <span class="visually-hidden">Add bookmark</span>
+        </button>
+      )}
       <label class="skip">
         <input type="checkbox" checked={skipSilence} onChange={(e) => setSkipSilence(e.currentTarget.checked)} />
         Skip silence

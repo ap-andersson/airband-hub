@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { Segment } from "./api";
+import { useTheme } from "./theme";
 
 export interface Decoded {
   duration: number;
@@ -36,6 +37,7 @@ export function Wave({ wave, from, to, playhead, marks, label, onPick, height, a
   const canvas = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
+  const { theme } = useTheme(); // the colours come from CSS; redraw when they change
 
   useEffect(() => {
     const el = canvas.current;
@@ -108,7 +110,7 @@ export function Wave({ wave, from, to, playhead, marks, label, onPick, height, a
       ctx.fillStyle = cssVar(el, "--wave-hover");
       ctx.fillRect(x(hover), 0, dpr, H);
     }
-  }, [wave, from, to, playhead, marks, hover, width, height]);
+  }, [wave, from, to, playhead, marks, hover, width, height, theme]);
 
   const timeAt = (clientX: number) => {
     const r = canvas.current!.getBoundingClientRect();

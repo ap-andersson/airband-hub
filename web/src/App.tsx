@@ -3,6 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { Frequency, Live, Mount, Receiver, Transmission } from "./api";
 import { ago, clock, seconds, snr, stationName } from "./format";
 import { LoginDialog, logout, useLoggedIn } from "./login";
+import { setTheme, useTheme, type ThemeChoice } from "./theme";
 import { PlayerBar, PlayerProvider, usePlayer } from "./player";
 import { Recordings } from "./Recordings";
 import { Link, useLocation } from "./router";
@@ -72,26 +73,32 @@ function Header({
   const loggedIn = useLoggedIn(hubSaysLoggedIn);
   return (
     <header class="header">
-      <h1>{title}</h1>
-      <div class="menubar">
-        <nav class="nav" aria-label="Pages">
-        <Link href="/" current={page === "live"}>
-          Live
-        </Link>
-        {recordingsEnabled && (
-          <Link href="/recordings" current={page === "recordings"}>
-            Recordings
-          </Link>
-        )}
-        </nav>
-        <div class="menubar-right">
+      <div class="title-row">
+        <h1>{title}</h1>
+        <div class="title-actions">
+          <ThemeToggle />
           {loggedIn && (
-            <button type="button" class="logout" onClick={logout}>
-              Log out
+            <button type="button" class="logout" onClick={logout} title="Log out">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M6.5 2.5H3.5a1 1 0 00-1 1v9a1 1 0 001 1h3M10.5 5l3 3-3 3M13.5 8H6" />
+              </svg>
+              <span class="visually-hidden">Log out</span>
             </button>
           )}
-          <Listen mount={mount} connection={connection} />
         </div>
+      </div>
+      <div class="menubar">
+        <nav class="nav" aria-label="Pages">
+          <Link href="/" current={page === "live"}>
+            Live
+          </Link>
+          {recordingsEnabled && (
+            <Link href="/recordings" current={page === "recordings"}>
+              Recordings
+            </Link>
+          )}
+        </nav>
+        <Listen mount={mount} connection={connection} />
       </div>
     </header>
   );
@@ -268,12 +275,26 @@ function groupRecent(recent: Transmission[]): Transmission[][] {
   return groups;
 }
 
-function TxRow({ t, now, sub }: { t: Transmission; now: Date; sub?: boolean }) {
+// On narrow screens the length and SNR columns are hidden; they show under the name instead,
+// in rows that are tapped open and in a group's rows.
+function TxMeta({ length, snr: s, approximate }: { length: number; snr: string; approximate?: boolean }) {
   return (
-    <tr class={sub ? "sub" : undefined}>
+    <span class="tx-meta">
+      {approximate && "≈ "}
+      {seconds(length)}, SNR {s}
+    </span>
+  );
+}
+
+function TxRow({ t, now, sub, open, onToggle }: { t: Transmission; now: Date; sub?: boolean; open?: boolean; onToggle?: () => void }) {
+  return (
+    <tr class={sub ? "sub" : open ? "single open" : "single"} onClick={onToggle}>
       <td title={ago(t.start, now)}>{clock(t.start)}</td>
       <td>
-        <span class="mhz-small">{t.freq}</span> {stationName(t.label, t.freq)}
+        <span class="freq-label">
+          <span class="mhz-small">{t.freq}</span> {stationName(t.label, t.freq)}
+        </span>
+        <TxMeta length={t.duration_seconds} snr={snr(t.snr_min_db, t.snr_max_db)} approximate={t.approximate} />
       </td>
       <td class="num">
         {t.approximate && <span title="Several ended within one second; this is their average">≈ </span>}
@@ -318,9 +339,11 @@ function Recent({ recent, metricsEnabled, now }: { recent: Transmission[]; metri
             {groupRecent(recent).map((g) => {
               const first = g.at(-1)!;
               const key = `${first.start}-${first.freq}`;
-              if (g.length === 1) return <TxRow key={key} t={first} now={now} />;
               const isOpen = open.has(key);
+              if (g.length === 1) return <TxRow key={key} t={first} now={now} open={isOpen} onToggle={() => toggle(key)} />;
               const snrs = g.filter((t) => t.snr_min_db !== 0 || t.snr_max_db !== 0);
+              const total = g.reduce((sum, t) => sum + t.duration_seconds, 0);
+              const snrRange = snrs.length ? snr(Math.min(...snrs.map((t) => t.snr_min_db)), Math.max(...snrs.map((t) => t.snr_max_db))) : "–";
               return (
                 <Fragment key={key}>
                   <tr class={isOpen ? "group open" : "group"} onClick={() => toggle(key)}>
@@ -331,14 +354,16 @@ function Recent({ recent, metricsEnabled, now }: { recent: Transmission[]; metri
                     </td>
                     <td>
                       <span class="mhz-small">{first.freq}</span> {stationName(first.label, first.freq)}{" "}
-                      <span class="group-count">{g.length} transmissions</span>
+                      <span class="group-count" title={`${g.length} transmissions`}>
+                        {g.length}
+                        <span class="count-word"> transmissions</span>
+                      </span>
+                      <TxMeta length={total} snr={snrRange} />
                     </td>
                     <td class="num" title="Total airtime">
-                      {seconds(g.reduce((sum, t) => sum + t.duration_seconds, 0))}
+                      {seconds(total)}
                     </td>
-                    <td class="num">
-                      {snrs.length ? snr(Math.min(...snrs.map((t) => t.snr_min_db)), Math.max(...snrs.map((t) => t.snr_max_db))) : "–"}
-                    </td>
+                    <td class="num">{snrRange}</td>
                   </tr>
                   {isOpen && g.map((t, i) => <TxRow key={`${key}-${i}`} t={t} now={now} sub />)}
                 </Fragment>
@@ -409,5 +434,31 @@ function Panel({ id, title, children }: { id: string; title: string; children: C
       </summary>
       <div class="panel-body">{children}</div>
     </details>
+  );
+}
+
+const THEMES: { choice: ThemeChoice; label: string; icon: string }[] = [
+  { choice: "auto", label: "Follow the system", icon: "M8 2.5a5.5 5.5 0 100 11zM8 2.5a5.5 5.5 0 010 11" },
+  { choice: "dark", label: "Dark", icon: "M12.5 9.5A5 5 0 016.5 3.5a5 5 0 106 6z" },
+  {
+    choice: "light",
+    label: "Light",
+    icon: "M8 5.5a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1",
+  },
+];
+
+function ThemeToggle() {
+  const { choice } = useTheme();
+  return (
+    <div class="theme-toggle" role="group" aria-label="Colours">
+      {THEMES.map((t) => (
+        <button key={t.choice} type="button" aria-pressed={choice === t.choice} title={t.label} onClick={() => setTheme(t.choice)}>
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d={t.icon} />
+          </svg>
+          <span class="visually-hidden">{t.label}</span>
+        </button>
+      ))}
+    </div>
   );
 }
