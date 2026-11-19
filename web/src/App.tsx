@@ -1,11 +1,20 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect } from "preact/hooks";
 import type { Frequency, Live, Mount, Receiver, Transmission } from "./api";
 import { ago, clock, isSet, seconds, snr, stationName } from "./format";
+import { PlayerBar, PlayerProvider, usePlayer } from "./player";
 import { Recordings } from "./Recordings";
 import { Link, useLocation } from "./router";
 import { useLive, type Connection } from "./useLive";
 
 export function App() {
+  return (
+    <PlayerProvider>
+      <Shell />
+    </PlayerProvider>
+  );
+}
+
+function Shell() {
   const { live, connection } = useLive();
   const url = useLocation();
   const now = live ? new Date(live.time) : new Date();
@@ -22,7 +31,7 @@ export function App() {
       {live === null ? (
         <p class="empty">{connection === "lost" ? "Cannot reach the hub. Retrying…" : "Connecting to the hub…"}</p>
       ) : page === "recordings" ? (
-        <Recordings enabled={live.recordings_enabled} url={url} />
+        <Recordings enabled={live.recordings_enabled} bookmarksEnabled={live.bookmarks_enabled} url={url} />
       ) : (
         <main>
           <Board live={live} />
@@ -32,6 +41,11 @@ export function App() {
           </div>
         </main>
       )}
+      <PlayerBar
+        hint={page === "recordings" && live?.recordings_enabled ? "Click a waveform or a transmission to listen." : null}
+        bookmarksEnabled={!!live?.bookmarks_enabled}
+        mount={mount}
+      />
     </div>
   );
 }
@@ -66,26 +80,11 @@ function Header({ mount, connection, now, page, recordingsEnabled }: { mount?: M
 }
 
 function Listen({ mount, connection }: { mount?: Mount; connection: Connection }) {
-  const audio = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false);
+  const player = usePlayer();
+  const { state } = player;
   const live = !!mount?.source_connected && connection === "open";
-
-  const toggle = () => {
-    const el = audio.current;
-    if (!el || !mount) return;
-    if (playing) {
-      // drop the connection instead of pausing, so the next play is live rather than minutes behind
-      el.removeAttribute("src");
-      el.load();
-      setPlaying(false);
-    } else {
-      el.src = mount.mount;
-      el.play().then(
-        () => setPlaying(true),
-        () => setPlaying(false),
-      );
-    }
-  };
+  const on = !!state.live && (state.status === "playing" || state.status === "loading");
+  const loading = !!state.live && state.status === "loading";
 
   let status: string;
   if (connection === "lost") status = "Hub unreachable";
@@ -95,17 +94,27 @@ function Listen({ mount, connection }: { mount?: Mount; connection: Connection }
 
   return (
     <div class="listen">
-      <button type="button" class={playing ? "listen-button playing" : "listen-button"} onClick={toggle} disabled={!mount} aria-pressed={playing}>
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          {playing ? <rect x="4" y="4" width="8" height="8" rx="1" /> : <path d="M5 3.5v9l7.5-4.5z" />}
-        </svg>
-        {playing ? "Stop" : "Listen live"}
+      <button
+        type="button"
+        class={`listen-button${on ? " playing" : ""}${loading ? " loading" : ""}`}
+        onClick={() => (on ? player.stopLive() : mount && player.playLive(mount.mount))}
+        disabled={!mount}
+        aria-pressed={on}
+        aria-busy={loading}
+      >
+        {loading ? (
+          <span class="spinner" aria-hidden="true" />
+        ) : (
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            {on ? <rect x="4" y="4" width="8" height="8" rx="1" /> : <path d="M5 3.5v9l7.5-4.5z" />}
+          </svg>
+        )}
+        {loading ? "Connecting…" : on ? "Stop" : "Listen live"}
       </button>
       <span class={live ? "stream-status ok" : "stream-status bad"}>
         <StatusIcon ok={live} />
         {status}
       </span>
-      <audio ref={audio} onEnded={() => setPlaying(false)} onError={() => setPlaying(false)} preload="none" />
     </div>
   );
 }

@@ -33,6 +33,9 @@ embedded web UI, and needs no changes to rtl_airband: it speaks the protocols rt
   - VLC gets ICY metadata, so it shows the frequency of the latest transmission.
   - An Icecast-compatible `/status-json.xsl` keeps players written for Icecast working, such as
     [tar1090](https://github.com/wiedehopf/tar1090)'s airband player.
+  - The hub's own player decodes the stream in the page and plays it about 0.5 s behind the
+    receiver, where a browser left to itself stays 5 to 20 s behind. This needs https (or
+    localhost); over plain http it falls back to the browser's player.
 - **Live dashboard.**
   - A strip per frequency with the signal level, noise floor and squelch level; it lights up while a transmission is on air.
   - Recent transmissions with their exact length and SNR.
@@ -44,7 +47,10 @@ embedded web UI, and needs no changes to rtl_airband: it speaks the protocols rt
   - A 5-minute detail view.
   - Jump to the previous or next transmission, or **skip silence** to hear only the transmissions back to back.
   - Download any hour.
-- **Light on a Pi.** The hub image is about 11 MB and uses a few MB of RAM. The rtl_airband image
+- **Bookmarks.** While listening, name the moment and save it. Bookmarks have their own list on the
+  recordings page, show as flags on the waveforms, and each has a link you can share. They are
+  kept in a small SQLite file in `HUB_DATA_DIR`; there is no database server.
+- **Light on a Pi.** The hub image is about 13 MB and uses a few MB of RAM. The rtl_airband image
   is 32 MB and runs only `rtl_airband`, where the all-in-one container it replaces was 708 MB.
 
 ## How it fits together
@@ -142,7 +148,7 @@ The hub is configured with environment variables. In the stack, put them in `DEP
 | `HUB_METRICS_INTERVAL` | `1s` | How often to read it |
 | `HUB_RECORDINGS_DIR` | (unset) | rtl_airband's file output folder, read-only. Without it there is no recordings page. The stack sets it. |
 | `HUB_RECORDINGS_LOCALTIME` | `false` | `true` if rtl_airband runs with `localtime = true`, so file names are in `TZ` instead of UTC |
-| `HUB_DATA_DIR` | (unset) | Writable folder for the waveform cache (about 6 KB per recorded hour). Without it, waveforms are only kept in memory and older recordings are not analysed ahead of time. The stack sets it. |
+| `HUB_DATA_DIR` | (unset) | Writable folder for the waveform cache (about 6 KB per recorded hour) and `hub.db`, the SQLite file that holds bookmarks. Without it, waveforms are only kept in memory, older recordings are not analysed ahead of time, and there are no bookmarks. The stack sets it. |
 | `HUB_BACKFILL_PAUSE` | `1s` | Pause between analysing older recordings in the background |
 | `HUB_BURST_BYTES` | `0` | Recent audio sent to a new listener at once. Playback starts sooner, but the player then stays that far behind live: 24576 is ~4 s at 48 kbit/s. |
 | `HUB_SOURCE_TIMEOUT` | `30s` | Drop a source that sends nothing for this long. rtl_airband is silent for ~10 s after connecting while the dongle starts. |
@@ -179,6 +185,7 @@ cached between builds.
 | `GET /api/live` | The dashboard's state as JSON; `/api/live/stream` pushes it every second as server-sent events |
 | `GET /api/mounts` | Mounts with their title, listeners and source state |
 | `GET /api/recordings/...` | Days, recordings, waveforms, audio from an exact time, downloads ([handlers](internal/recordings/handlers.go)) |
+| `GET`/`POST /api/bookmarks`, `GET`/`PATCH`/`DELETE /api/bookmarks/{id}` | Bookmarks: list, add `{"name", "path", "offset"}`, get, rename `{"name"}`, delete ([handlers](internal/recordings/bookmarks.go)) |
 | `SOURCE`/`PUT /<mount>`, `GET /admin/metadata` | The Icecast source side, for rtl_airband |
 | `GET /healthz` | Liveness |
 

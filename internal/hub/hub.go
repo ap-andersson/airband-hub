@@ -34,6 +34,7 @@ type Live struct {
 	Mounts            []relay.Status `json:"mounts"`
 	MetricsEnabled    bool           `json:"metrics_enabled"`
 	RecordingsEnabled bool           `json:"recordings_enabled"`
+	BookmarksEnabled  bool           `json:"bookmarks_enabled"`
 	airband.State
 }
 
@@ -44,6 +45,7 @@ type Live struct {
 //	GET  /api/live           JSON snapshot for the dashboard
 //	GET  /api/live/stream    the same, pushed every LiveInterval as server-sent events
 //	GET  /api/recordings/... recorded files, waveforms and audio (see recordings.Handlers)
+//	     /api/bookmarks/...  named moments in the recordings (with a data directory)
 //	GET  /admin/metadata     Icecast metadata updates (for rtl_airband)
 //	SOURCE|PUT /<mount>      Icecast source push (for rtl_airband)
 //	GET|HEAD /<mount>        live stream for players
@@ -60,7 +62,8 @@ func NewHandler(cfg Config, reg *relay.Registry, log *slog.Logger) http.Handler 
 	}).Register(mux)
 
 	live := func() Live {
-		l := Live{Time: time.Now(), Mounts: reg.List(), MetricsEnabled: cfg.Tracker != nil, RecordingsEnabled: cfg.Recordings != nil}
+		l := Live{Time: time.Now(), Mounts: reg.List(), MetricsEnabled: cfg.Tracker != nil, RecordingsEnabled: cfg.Recordings != nil,
+			BookmarksEnabled: cfg.Recordings != nil && cfg.Recordings.Store != nil}
 		if cfg.Tracker != nil {
 			l.State = cfg.Tracker.State()
 		} else {

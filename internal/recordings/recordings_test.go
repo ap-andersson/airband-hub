@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/ap-andersson/airband-hub/internal/store"
 )
 
 func TestParseName(t *testing.T) {
@@ -67,7 +69,12 @@ func setup(t *testing.T) (*httptest.Server, string, string) {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := &Handlers{Library: lib, Analyzer: &Analyzer{Library: lib, DataDir: data, Log: log}, Log: log}
+	db, err := store.Open(filepath.Join(data, "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	h := &Handlers{Library: lib, Analyzer: &Analyzer{Library: lib, DataDir: data, Log: log}, Store: db, Log: log}
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := httptest.NewServer(mux)

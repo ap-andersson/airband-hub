@@ -22,6 +22,7 @@
   --wave-hover: #a9b5bf;
   --tx-band: rgba(240, 168, 48, 0.2);
   --playhead: #f0a830;
+  --mark: #e7ecef;
 
   --font-body: "Barlow", system-ui, sans-serif;
   --font-display: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
@@ -51,6 +52,7 @@
     --wave-hover: #4f5d69;
     --tx-band: rgba(240, 168, 48, 0.28);
     --playhead: #b86e00;
+    --mark: #18222b;
   }
 }
 
@@ -838,9 +840,143 @@ td {
   height: 1rem;
 }
 
-.player-day {
-  font: inherit;
+/* room for the player bar wherever it shows */
+.page:has(> .player) {
+  padding-bottom: 6rem;
+}
+
+.player-where .error {
+  color: var(--bad);
+}
+
+/* loading: a ring turns around the play button; the icon stays so the button keeps its meaning */
+.player-buttons button.play {
+  position: relative;
+}
+
+.player-buttons button.play.loading::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  border-top-color: var(--on-air);
+  border-right-color: var(--on-air);
+  animation: spin 0.9s linear infinite;
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-buttons button.play.loading::after,
+  .spinner {
+    animation: pulse 1.6s ease-in-out infinite;
+    border-color: var(--on-air);
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.25;
+    }
+  }
+}
+
+.live-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: var(--ink-3);
+  vertical-align: 0.15em;
+}
+
+.live-dot.on {
+  background: var(--on-air);
+}
+
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.volume-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.volume-icon:hover {
+  color: var(--ink);
+}
+
+.volume-icon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-linecap: round;
+}
+
+.volume input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 6.5rem;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--ink-2) var(--fill), var(--wave-track) var(--fill));
+  cursor: pointer;
+}
+
+.volume input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--strip);
+}
+
+.volume input::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--strip);
+}
+
+.player-links {
   margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1.25rem;
+}
+
+.player-link {
+  font: inherit;
+  padding: 0;
   background: none;
   border: 0;
   color: var(--ink-2);
@@ -848,9 +984,193 @@ td {
   cursor: pointer;
 }
 
+.player-link:hover {
+  color: var(--ink);
+}
+
+.saved {
+  color: var(--ink);
+}
+
+/* Bookmarks */
+
+.view-toggle {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.add-bookmark,
+.rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+}
+
+.add-bookmark {
+  flex-basis: 100%;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--strip-edge);
+}
+
+.add-bookmark label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1 1 18rem;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+.add-bookmark label strong {
+  color: var(--ink);
+}
+
+.add-bookmark input,
+.rename input,
+.share-link input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--strip-edge);
+  border-radius: 4px;
+  background: var(--page);
+  color: var(--ink);
+  min-width: 0;
+}
+
+.rename input {
+  font: 600 1.5rem var(--font-display);
+  flex: 1 1 16rem;
+}
+
+.add-bookmark button,
+.rename button,
+.bookmark-actions button {
+  font: 600 0.9rem var(--font-body);
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--strip-edge);
+  border-radius: 4px;
+  background: var(--strip);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.add-bookmark button:hover,
+.rename button:hover,
+.bookmark-actions button:hover {
+  border-color: var(--ink-3);
+}
+
+button.primary {
+  background: var(--on-air);
+  border-color: var(--on-air);
+  color: var(--on-air-ink);
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}
+
+.form-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--bad);
+}
+
+.bookmark-list {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+  max-height: calc(100vh - 9rem);
+  overflow-y: auto;
+}
+
+.bookmark-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bookmark-link {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.bookmark-link:hover {
+  color: var(--ink);
+  background: var(--strip);
+}
+
+.bookmark-link[aria-current="page"] {
+  color: var(--ink);
+  background: var(--strip);
+  box-shadow: inset 3px 0 0 var(--mark);
+}
+
+.bookmark-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bookmark-when {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.bookmark-head h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.bookmark-head p {
+  margin: 0.15rem 0 0;
+}
+
+.bookmark-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.share-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 36rem;
+  margin-bottom: 1rem;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
 /* Narrow screens */
 
 @media (max-width: 52rem) {
+  .bookmark-list {
+    position: static;
+    max-height: 14rem;
+  }
+
   .strip {
     grid-template-columns: 6rem minmax(0, 1fr);
   }

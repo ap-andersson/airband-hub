@@ -15,12 +15,15 @@ import (
 	_ "time/tzdata" // distroless has no zoneinfo; the browser's zone arrives as an IANA name
 
 	"github.com/ap-andersson/airband-hub/internal/mp3"
+	"github.com/ap-andersson/airband-hub/internal/store"
 )
 
 type Handlers struct {
 	Library  *Library
 	Analyzer *Analyzer
-	Log      *slog.Logger
+	// Store keeps bookmarks; nil when there is no data directory, and then there are none.
+	Store *store.Store
+	Log   *slog.Logger
 }
 
 // Register adds:
@@ -30,12 +33,17 @@ type Handlers struct {
 //	GET /api/recordings/waveform?path=...           peaks and transmission markers
 //	GET /api/recordings/audio?path=...&from=12.5    the audio from that time, cut at an exact frame
 //	GET /api/recordings/download?path=...           the whole file
+//
+// and, with a Store, the bookmark endpoints (see registerBookmarks).
 func (h *Handlers) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/recordings/days", h.days)
 	mux.HandleFunc("GET /api/recordings", h.list)
 	mux.HandleFunc("GET /api/recordings/waveform", h.waveform)
 	mux.HandleFunc("GET /api/recordings/audio", h.audio)
 	mux.HandleFunc("GET /api/recordings/download", h.download)
+	if h.Store != nil {
+		h.registerBookmarks(mux)
+	}
 }
 
 func location(r *http.Request) (*time.Location, error) {
@@ -104,7 +112,10 @@ func (h *Handlers) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) recording(w http.ResponseWriter, r *http.Request) (Recording, bool) {
-	p := r.URL.Query().Get("path")
+	return h.recordingAt(w, r.URL.Query().Get("path"))
+}
+
+func (h *Handlers) recordingAt(w http.ResponseWriter, p string) (Recording, bool) {
 	if p == "" || path.Clean(p) != p || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "..") {
 		http.Error(w, "invalid path", http.StatusBadRequest)
 		return Recording{}, false
@@ -195,6 +206,10 @@ func (h *Handlers) fail(w http.ResponseWriter, err error) {
 
 // writeJSON gzips when the client accepts it; waveforms are mostly silence and shrink a lot.
 func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
+	writeJSONStatus(w, r, http.StatusOK, v)
+}
+
+func writeJSONStatus(w http.ResponseWriter, r *http.Request, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Vary", "Accept-Encoding")
 	var out io.Writer = w
@@ -204,5 +219,6 @@ func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
 		defer zw.Close()
 		out = zw
 	}
+	w.WriteHeader(status)
 	json.NewEncoder(out).Encode(v)
 }

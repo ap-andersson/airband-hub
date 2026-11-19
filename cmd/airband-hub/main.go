@@ -17,8 +17,10 @@
 //	                     Without it there is no recordings browser.
 //	HUB_RECORDINGS_LOCALTIME  true if rtl_airband runs with localtime = true, so file names
 //	                     are in the TZ time zone rather than UTC (default false)
-//	HUB_DATA_DIR         a writable directory for the waveform cache. Without it waveforms
-//	                     are kept in memory only and old recordings are not analysed ahead.
+//	HUB_DATA_DIR         a writable directory for the waveform cache and the hub's database
+//	                     (hub.db, SQLite, holding bookmarks). Without it waveforms are kept in
+//	                     memory only, old recordings are not analysed ahead and there are no
+//	                     bookmarks.
 //	HUB_BACKFILL_PAUSE   pause between analysing older recordings in the background (default 1s)
 //	HUB_LOG_LEVEL        debug, info, warn or error (default info)
 package main
@@ -31,6 +33,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -39,6 +42,7 @@ import (
 	"github.com/ap-andersson/airband-hub/internal/hub"
 	"github.com/ap-andersson/airband-hub/internal/recordings"
 	"github.com/ap-andersson/airband-hub/internal/relay"
+	"github.com/ap-andersson/airband-hub/internal/store"
 	"github.com/ap-andersson/airband-hub/web"
 )
 
@@ -120,8 +124,22 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		analyzer := &recordings.Analyzer{Library: lib, DataDir: os.Getenv("HUB_DATA_DIR"), Log: log}
+		dataDir := os.Getenv("HUB_DATA_DIR")
+		analyzer := &recordings.Analyzer{Library: lib, DataDir: dataDir, Log: log}
 		recs = &recordings.Handlers{Library: lib, Analyzer: analyzer, Log: log}
+		if dataDir != "" {
+			if err := os.MkdirAll(dataDir, 0o755); err != nil {
+				return fmt.Errorf("HUB_DATA_DIR: %w", err)
+			}
+			db, err := store.Open(filepath.Join(dataDir, "hub.db"))
+			if err != nil {
+				return fmt.Errorf("HUB_DATA_DIR: %w", err)
+			}
+			defer db.Close()
+			recs.Store = db
+		} else {
+			log.Info("HUB_DATA_DIR not set; bookmarks are off")
+		}
 		go analyzer.Backfill(ctx, pause)
 		log.Info("serving recordings", "dir", dir, "names_in", loc.String(), "cache", analyzer.DataDir)
 	}

@@ -1,3 +1,6 @@
+export const clockFmt = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+export const dayFmt = new Intl.DateTimeFormat([], { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
 // Labels often repeat the frequency ("MALMEN TOWER 129.800"), which the strip already shows.
 export function stationName(label: string, freq: string): string {
   return label.replace(freq, "").trim() || label;

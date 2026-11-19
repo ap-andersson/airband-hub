@@ -1,20 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { Day, Recording, Segment, Waveform } from "./api";
-import { seconds } from "./format";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { apiSend, type Bookmark, type Day, type Recording, type Segment, type Waveform } from "./api";
+import { clockFmt, dayFmt, seconds } from "./format";
+import { at, BOOKMARKS_CHANGED, LEAD_IN, usePlayer, type Player } from "./player";
 import { Link, navigate } from "./router";
 import { decode, Wave, type Decoded } from "./Wave";
 
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const DETAIL_SPAN = 300; // seconds shown in the detail view
-const LEAD_IN = 0.3; // start a transmission slightly early so its first word is not clipped
 
-const clockFmt = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
 const hourFmt = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-const dayFmt = new Intl.DateTimeFormat([], { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 const shortDayFmt = new Intl.DateTimeFormat([], { weekday: "short", day: "numeric" });
 const monthFmt = new Intl.DateTimeFormat([], { month: "long", year: "numeric" });
 
-const at = (rec: Recording, t: number) => new Date(new Date(rec.start).getTime() + t * 1000);
 const localDate = (d: string) => new Date(`${d}T12:00:00`); // noon avoids DST edges
 
 function useJSON<T>(url: string | null, refresh = 0): { data: T | null; error: string | null } {
@@ -50,100 +47,6 @@ function loadWave(rec: Recording): Promise<Decoded> {
   return p;
 }
 
-interface PlayerState {
-  rec: Recording | null;
-  wave: Decoded | null;
-  playing: boolean;
-  position: number;
-}
-
-function usePlayer() {
-  const audio = useRef<HTMLAudioElement>(new Audio());
-  const offset = useRef(0); // the recording time the current audio URL starts at
-  const [state, setState] = useState<PlayerState>({ rec: null, wave: null, playing: false, position: 0 });
-  const [skipSilence, setSkipSilence] = useState(false);
-  const live = useRef({ state, skipSilence });
-  live.current = { state, skipSilence };
-
-  const play = useCallback((rec: Recording, wave: Decoded, t: number) => {
-    const el = audio.current;
-    offset.current = Math.max(0, t);
-    el.src = `/api/recordings/audio?path=${encodeURIComponent(rec.path)}&from=${offset.current.toFixed(3)}`;
-    setState({ rec, wave, playing: true, position: offset.current });
-    el.play().catch(() => setState((s) => ({ ...s, playing: false })));
-  }, []);
-
-  const toggle = useCallback(() => {
-    const el = audio.current;
-    if (!live.current.state.rec) return;
-    if (el.paused) {
-      el.play().then(() => setState((s) => ({ ...s, playing: true })));
-    } else {
-      el.pause();
-      setState((s) => ({ ...s, playing: false }));
-    }
-  }, []);
-
-  const jump = useCallback(
-    (dir: 1 | -1) => {
-      const { rec, wave, position } = live.current.state;
-      if (!rec || !wave) return;
-      const tx = wave.transmissions;
-      const target =
-        dir > 0
-          ? tx.find((s) => s.start - LEAD_IN > position + 0.5)
-          : [...tx].reverse().find((s) => s.start - LEAD_IN < position - 1.5);
-      if (target) play(rec, wave, target.start - LEAD_IN);
-    },
-    [play],
-  );
-
-  // the playhead and skip-silence need a per-frame check, but only while audio plays
-  useEffect(() => {
-    if (!state.playing) return;
-    const el = audio.current;
-    let frame = 0;
-    const tick = () => {
-      const { state: s, skipSilence: skip } = live.current;
-      if (s.rec && s.wave && !el.paused) {
-        const pos = offset.current + el.currentTime;
-        if (skip) {
-          const inside = s.wave.transmissions.some((seg) => pos >= seg.start - LEAD_IN - 0.2 && pos <= seg.end + 0.5);
-          if (!inside) {
-            const next = s.wave.transmissions.find((seg) => seg.start - LEAD_IN > pos);
-            if (next) {
-              play(s.rec, s.wave, next.start - LEAD_IN);
-            } else {
-              el.pause();
-              setState((st) => ({ ...st, playing: false }));
-              return;
-            }
-            frame = requestAnimationFrame(tick);
-            return;
-          }
-        }
-        setState((st) => (Math.abs(st.position - pos) > 0.04 ? { ...st, position: pos } : st));
-      }
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [state.playing, play]);
-
-  useEffect(() => {
-    const el = audio.current;
-    const ended = () => setState((s) => ({ ...s, playing: false }));
-    el.addEventListener("ended", ended);
-    return () => {
-      el.removeEventListener("ended", ended);
-      el.pause();
-    };
-  }, []);
-
-  return { state, play, toggle, jump, skipSilence, setSkipSilence };
-}
-
-type Player = ReturnType<typeof usePlayer>;
 
 type Order = "oldest" | "newest";
 
@@ -180,12 +83,21 @@ function OrderToggle({ order, onChange }: { order: Order; onChange: (o: Order) =
   );
 }
 
-export function Recordings({ enabled, url }: { enabled: boolean; url: URL }) {
-  const days = useJSON<Day[]>(enabled ? `/api/recordings/days?tz=${encodeURIComponent(tz)}` : null);
+export function Recordings({ enabled, bookmarksEnabled, url }: { enabled: boolean; bookmarksEnabled: boolean; url: URL }) {
+  const bookmarkId = Number(url.searchParams.get("bookmark")) || null;
+  const view = bookmarksEnabled && (bookmarkId !== null || url.searchParams.get("view") === "bookmarks") ? "bookmarks" : "all";
+  const [bookmarksVersion, setBookmarksVersion] = useState(0);
+  const bookmarks = useJSON<Bookmark[]>(enabled && bookmarksEnabled ? "/api/bookmarks" : null, bookmarksVersion);
+  const bookmarksChanged = () => setBookmarksVersion((n) => n + 1);
+  const days = useJSON<Day[]>(enabled && view === "all" ? `/api/recordings/days?tz=${encodeURIComponent(tz)}` : null);
   const date = url.searchParams.get("date") ?? days.data?.[0]?.date ?? null;
   const [refresh, setRefresh] = useState(0);
-  const recs = useJSON<Recording[]>(date ? `/api/recordings?date=${date}&tz=${encodeURIComponent(tz)}` : null, refresh);
+  const recs = useJSON<Recording[]>(date && view === "all" ? `/api/recordings?date=${date}&tz=${encodeURIComponent(tz)}` : null, refresh);
   const player = usePlayer();
+  useEffect(() => {
+    addEventListener(BOOKMARKS_CHANGED, bookmarksChanged);
+    return () => removeEventListener(BOOKMARKS_CHANGED, bookmarksChanged);
+  }, []);
   const [open, setOpen] = useState<{ path: string; focus: number } | null>(null);
   const [order, setOrder] = useOrder();
   const hours = recs.data ? (order === "newest" ? [...recs.data].reverse() : recs.data) : null;
@@ -207,8 +119,27 @@ export function Recordings({ enabled, url }: { enabled: boolean; url: URL }) {
     );
   }
 
+  const marksFor = (rec: Recording) => (bookmarks.data ?? []).filter((b) => b.path === rec.path.replace(/\.tmp$/, ""));
+  const switcher = bookmarksEnabled && <ViewToggle view={view} count={bookmarks.data?.length ?? null} />;
+
+  if (view === "bookmarks") {
+    return (
+      <main class="recordings">
+        {switcher}
+        <Bookmarks
+          list={bookmarks.data}
+          error={bookmarks.error}
+          selectedId={bookmarkId}
+          player={player}
+          onChanged={bookmarksChanged}
+        />
+      </main>
+    );
+  }
+
   return (
     <main class="recordings">
+      {switcher}
       <DayList days={days.data} error={days.error} selected={date} />
       <section class="day" aria-labelledby="day-title">
         {date && (
@@ -228,11 +159,11 @@ export function Recordings({ enabled, url }: { enabled: boolean; url: URL }) {
               player={player}
               open={open?.path === rec.path ? open.focus : null}
               onOpen={(focus) => setOpen({ path: rec.path, focus })}
+              marks={marksFor(rec)}
             />
           ))}
         </ol>
       </section>
-      <PlayerBar player={player} />
     </main>
   );
 }
@@ -270,7 +201,21 @@ function DayList({ days, error, selected }: { days: Day[] | null; error: string 
   );
 }
 
-function HourRow({ rec, player, open, onOpen }: { rec: Recording; player: Player; open: number | null; onOpen: (focus: number) => void }) {
+function HourRow({
+  rec,
+  player,
+  open,
+  onOpen,
+  marks: bookmarks,
+}: {
+  rec: Recording;
+  player: Player;
+  open: number | null;
+  onOpen: (focus: number) => void;
+  marks?: Bookmark[];
+}) {
+  const markKey = bookmarks?.map((b) => b.offset).join(",") ?? "";
+  const marks = useMemo(() => (markKey ? markKey.split(",").map(Number) : undefined), [markKey]);
   const row = useRef<HTMLLIElement>(null);
   const [visible, setVisible] = useState(false);
   const [wave, setWave] = useState<Decoded | null>(null);
@@ -342,6 +287,7 @@ function HourRow({ rec, player, open, onOpen }: { rec: Recording; player: Player
           from={0}
           to={Math.max(wave.duration, 1)}
           playhead={playhead}
+          marks={marks}
           height={44}
           label={(t) => clockFmt.format(at(rec, t))}
           onPick={pick}
@@ -357,6 +303,7 @@ function HourRow({ rec, player, open, onOpen }: { rec: Recording; player: Player
             from={detailFrom}
             to={detailFrom + DETAIL_SPAN}
             playhead={playhead}
+            marks={marks}
             height={96}
             label={(t) => clockFmt.format(at(rec, t))}
             onPick={(t) => {
@@ -397,70 +344,221 @@ function HourRow({ rec, player, open, onOpen }: { rec: Recording; player: Player
   );
 }
 
-function PlayerBar({ player }: { player: Player }) {
-  const { state, toggle, jump, skipSilence, setSkipSilence } = player;
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement || e.target instanceof HTMLAnchorElement) return;
-      if (e.key === " ") {
-        e.preventDefault();
-        toggle();
-      } else if (e.key === "ArrowRight" && e.altKey) jump(1);
-      else if (e.key === "ArrowLeft" && e.altKey) jump(-1);
-    };
-    addEventListener("keydown", key);
-    return () => removeEventListener("keydown", key);
-  }, [toggle, jump]);
-
-  if (!state.rec) {
-    return (
-      <div class="player idle" role="region" aria-label="Player">
-        Click a waveform or a transmission to listen.
-      </div>
-    );
-  }
-  const when = at(state.rec, state.position);
+function ViewToggle({ view, count }: { view: "all" | "bookmarks"; count: number | null }) {
   return (
-    <div class="player" role="region" aria-label="Player">
-      <div class="player-buttons">
-        <button type="button" onClick={() => jump(-1)} title="Previous transmission (Alt+Left)">
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M4 3v10M13 3.5v9L6 8z" />
-          </svg>
-          <span class="visually-hidden">Previous transmission</span>
-        </button>
-        <button type="button" class="play" onClick={toggle} title="Play or pause (Space)">
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            {state.playing ? <path d="M4.5 3h2.5v10H4.5zM9 3h2.5v10H9z" /> : <path d="M5 3.5v9l7.5-4.5z" />}
-          </svg>
-          <span class="visually-hidden">{state.playing ? "Pause" : "Play"}</span>
-        </button>
-        <button type="button" onClick={() => jump(1)} title="Next transmission (Alt+Right)">
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M12 3v10M3 3.5v9L10 8z" />
-          </svg>
-          <span class="visually-hidden">Next transmission</span>
-        </button>
-      </div>
-      <div class="player-where">
-        <strong>{clockFmt.format(when)}</strong>
-        <span class="secondary">{dayFmt.format(when)}</span>
-      </div>
-      <label class="skip">
-        <input type="checkbox" checked={skipSilence} onChange={(e) => setSkipSilence(e.currentTarget.checked)} />
-        Skip silence
-      </label>
-      <button
-        type="button"
-        class="player-day"
-        onClick={() => {
-          const d = new Date(state.rec!.start);
-          const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-          navigate(`/recordings?date=${date}`);
-        }}
-      >
-        Show its day
+    <div class="segmented view-toggle" role="group" aria-label="Show">
+      <button type="button" aria-pressed={view === "all"} onClick={() => view !== "all" && navigate("/recordings")}>
+        All recordings
+      </button>
+      <button type="button" aria-pressed={view === "bookmarks"} onClick={() => view !== "bookmarks" && navigate("/recordings?view=bookmarks")}>
+        Bookmarks{count ? ` (${count})` : ""}
       </button>
     </div>
+  );
+}
+
+const bookmarkHref = (b: Bookmark) => `/recordings?bookmark=${b.id}`;
+
+function playBookmark(player: Player, b: Bookmark) {
+  const rec = b.recording;
+  if (rec) loadWave(rec).then((w) => player.play(rec, w, b.offset));
+}
+
+function Bookmarks({
+  list,
+  error,
+  selectedId,
+  player,
+  onChanged,
+}: {
+  list: Bookmark[] | null;
+  error: string | null;
+  selectedId: number | null;
+  player: Player;
+  onChanged: () => void;
+}) {
+  const selected = list && (selectedId === null ? list[0] : list.find((b) => b.id === selectedId));
+
+  // the address always names the bookmark on screen, so it can be shared as it is
+  useEffect(() => {
+    if (selectedId === null && list?.[0]) navigate(bookmarkHref(list[0]), true);
+  }, [selectedId, list]);
+
+  return (
+    <>
+      <nav class="bookmark-list" aria-label="Bookmarks">
+        {error && <p class="empty">Cannot list bookmarks: {error}</p>}
+        {list === null && !error && <p class="empty">Loading bookmarks…</p>}
+        <ul>
+          {list?.map((b) => (
+            <li key={b.id}>
+              <a
+                href={bookmarkHref(b)}
+                class="bookmark-link"
+                aria-current={b.id === selected?.id ? "page" : undefined}
+                onClick={(e) => {
+                  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  e.preventDefault();
+                  navigate(bookmarkHref(b));
+                  playBookmark(player, b);
+                }}
+              >
+                <span class="bookmark-name">{b.name}</span>
+                <span class="bookmark-when">
+                  {shortDayFmt.format(new Date(b.at))} {hourFmt.format(new Date(b.at))}
+                  {b.freq && ` · ${b.freq}`}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <section class="day">
+        {list?.length === 0 && (
+          <p class="empty">
+            While a recording plays, use <strong>Add bookmark</strong> in the player to save that moment with a name. Bookmarks are listed here and each has
+            its own link to share.
+          </p>
+        )}
+        {list && list.length > 0 && !selected && (
+          <p class="empty">
+            There is no such bookmark; it may have been deleted. <Link href="/recordings?view=bookmarks">Show all bookmarks</Link>
+          </p>
+        )}
+        {selected && (
+          <BookmarkDetail
+            key={selected.id}
+            b={selected}
+            sameHour={list!.filter((o) => o.path === selected.path)}
+            player={player}
+            onChanged={onChanged}
+          />
+        )}
+      </section>
+    </>
+  );
+}
+
+function BookmarkDetail({ b, sameHour, player, onChanged }: { b: Bookmark; sameHour: Bookmark[]; player: Player; onChanged: () => void }) {
+  const [focus, setFocus] = useState(b.offset);
+  const [renaming, setRenaming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shared, setShared] = useState<"copied" | "show" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const when = new Date(b.at);
+  const link = `${location.origin}${bookmarkHref(b)}`;
+
+  const share = () => {
+    // the clipboard needs https (or localhost); otherwise show the link to copy by hand
+    if (!navigator.clipboard) return setShared("show");
+    navigator.clipboard.writeText(link).then(
+      () => setShared("copied"),
+      () => setShared("show"),
+    );
+  };
+
+  const remove = () =>
+    apiSend("DELETE", `/api/bookmarks/${b.id}`).then(
+      () => {
+        onChanged();
+        navigate("/recordings?view=bookmarks", true);
+      },
+      (e) => setError(`Not deleted: ${e.message ?? e}`),
+    );
+
+  return (
+    <article class="bookmark" aria-labelledby="bookmark-title">
+      <div class="bookmark-head">
+        {renaming ? (
+          <RenameForm b={b} onDone={() => setRenaming(false)} onChanged={onChanged} />
+        ) : (
+          <h2 id="bookmark-title">{b.name}</h2>
+        )}
+        <p class="secondary">
+          {dayFmt.format(when)}, {clockFmt.format(when)}
+          {b.freq && `, ${b.freq} MHz`}
+        </p>
+      </div>
+      <div class="bookmark-actions">
+        {b.recording && (
+          <button type="button" class="primary" onClick={() => playBookmark(player, b)}>
+            Play from the bookmark
+          </button>
+        )}
+        <button type="button" onClick={share}>
+          {shared === "copied" ? "Link copied" : "Copy link"}
+        </button>
+        {!renaming && (
+          <button type="button" onClick={() => setRenaming(true)}>
+            Rename
+          </button>
+        )}
+        {confirmDelete ? (
+          <span class="confirm">
+            Delete “{b.name}”?{" "}
+            <button type="button" class="danger" onClick={remove}>
+              Delete bookmark
+            </button>
+            <button type="button" onClick={() => setConfirmDelete(false)}>
+              Keep it
+            </button>
+          </span>
+        ) : (
+          <button type="button" onClick={() => setConfirmDelete(true)}>
+            Delete
+          </button>
+        )}
+      </div>
+      {shared === "show" && (
+        <label class="share-link">
+          Link to this bookmark
+          <input readOnly value={link} ref={(el) => el?.select()} onFocus={(e) => e.currentTarget.select()} />
+        </label>
+      )}
+      {error && <p class="form-error">{error}</p>}
+      {b.recording ? (
+        <ol class="hours">
+          <HourRow rec={b.recording} player={player} open={focus} onOpen={setFocus} marks={sameHour} />
+        </ol>
+      ) : (
+        <p class="empty">The recording this bookmark points into is no longer there, so it cannot be played.</p>
+      )}
+    </article>
+  );
+}
+
+function RenameForm({ b, onDone, onChanged }: { b: Bookmark; onDone: () => void; onChanged: () => void }) {
+  const [name, setName] = useState(b.name);
+  const [error, setError] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => input.current?.select(), []);
+  return (
+    <form
+      class="rename"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        apiSend("PATCH", `/api/bookmarks/${b.id}`, { name: name.trim() }).then(
+          () => {
+            onChanged();
+            onDone();
+          },
+          (e) => setError(`Not renamed: ${e.message ?? e}`),
+        );
+      }}
+      onKeyDown={(e) => e.key === "Escape" && onDone()}
+    >
+      <label class="visually-hidden" for="rename-input">
+        Name
+      </label>
+      <input id="rename-input" ref={input} value={name} maxLength={100} onInput={(e) => setName(e.currentTarget.value)} />
+      <button type="submit" class="primary" disabled={!name.trim()}>
+        Save name
+      </button>
+      <button type="button" onClick={onDone}>
+        Cancel
+      </button>
+      {error && <p class="form-error">{error}</p>}
+    </form>
   );
 }

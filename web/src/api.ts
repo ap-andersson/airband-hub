@@ -56,6 +56,7 @@ export interface Live {
   mounts: Mount[];
   metrics_enabled: boolean;
   recordings_enabled: boolean;
+  bookmarks_enabled: boolean;
   receiver: Receiver;
   frequencies: Frequency[];
   recent: Transmission[];
@@ -89,4 +90,28 @@ export interface Waveform {
   peaks_per_second: number;
   peaks: string; // base64, one byte per bucket: 0 = below -60 dBFS, 1..255 = -60..0 dBFS
   transmissions: Segment[];
+}
+
+// /api/bookmarks
+
+export interface Bookmark {
+  id: number;
+  name: string;
+  path: string; // the recording's final name, without .tmp
+  offset: number; // seconds into the recording
+  at: string; // the moment itself
+  freq?: string;
+  created: string;
+  recording: Recording | null; // null once the file is gone
+}
+
+// Sends a JSON request; resolves to the decoded body, or null for 204 No Content.
+export async function apiSend<T>(method: string, url: string, body?: unknown): Promise<T | null> {
+  const r = await fetch(url, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error((await r.text()).trim() || r.statusText);
+  return r.status === 204 ? null : ((await r.json()) as T);
 }

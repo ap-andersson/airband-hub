@@ -13,6 +13,7 @@ interface Props {
   from: number; // visible window, seconds into the recording
   to: number;
   playhead: number | null;
+  marks?: number[]; // bookmarks, seconds into the recording
   label: (t: number) => string; // hover label for a time
   onPick: (t: number, snapped: Segment | null) => void;
   height: number;
@@ -31,7 +32,7 @@ function cssVar(el: Element, name: string) {
 
 // A waveform like an audio editor's: the loudest sample per pixel, mirrored around the middle,
 // with detected transmissions shaded behind it.
-export function Wave({ wave, from, to, playhead, label, onPick, height, ariaLabel }: Props) {
+export function Wave({ wave, from, to, playhead, marks, label, onPick, height, ariaLabel }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
@@ -83,6 +84,22 @@ export function Wave({ wave, from, to, playhead, label, onPick, height, ariaLabe
       ctx.fillRect(px, mid - h, 1, h * 2);
     }
 
+    if (marks?.length) {
+      // a line with a small flag at the top, so it reads differently from the playhead
+      ctx.fillStyle = cssVar(el, "--mark");
+      const f = Math.min(6 * dpr, H / 4);
+      for (const m of marks) {
+        if (m < from || m > to) continue;
+        const mx = Math.round(x(m));
+        ctx.fillRect(mx, 0, dpr, H);
+        ctx.beginPath();
+        ctx.moveTo(mx, 0);
+        ctx.lineTo(mx + f, f / 2);
+        ctx.lineTo(mx, f);
+        ctx.fill();
+      }
+    }
+
     if (playhead !== null && playhead >= from && playhead <= to) {
       ctx.fillStyle = cssVar(el, "--playhead");
       ctx.fillRect(x(playhead) - dpr, 0, 2 * dpr, H);
@@ -91,7 +108,7 @@ export function Wave({ wave, from, to, playhead, label, onPick, height, ariaLabe
       ctx.fillStyle = cssVar(el, "--wave-hover");
       ctx.fillRect(x(hover), 0, dpr, H);
     }
-  }, [wave, from, to, playhead, hover, width, height]);
+  }, [wave, from, to, playhead, marks, hover, width, height]);
 
   const timeAt = (clientX: number) => {
     const r = canvas.current!.getBoundingClientRect();

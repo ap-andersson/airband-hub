@@ -38,6 +38,7 @@ Related repos:
 | D10 | MP3 decoding with minimp3 (C, vendored) via cgo | Pure-Go decoders cannot read 8 kHz MPEG-2.5, which is what rtl_airband writes |
 | D11 | rtl_airband is built with NFM off | NFM support also doubles the audio rate from 8 to 16 kHz |
 | D12 | Applying config changes restarts rtl_airband: through a restricted Docker socket if one is provided, otherwise the user is asked to | rtl_airband has no config reload |
+| D13 | The hub's own data lives in one SQLite file, `hub.db` in `HUB_DATA_DIR`, through the pure-Go `modernc.org/sqlite` | No database server to run, and no C to compile for it. It costs a few MB of image size. The schema is versioned with `PRAGMA user_version`. |
 
 ## Architecture
 
@@ -104,11 +105,20 @@ Prometheus ── scrapes airband /metrics directly
   - previous/next transmission and skip silence
   - waveforms cached on disk and analysed in the background
   - days grouped in the viewer's time zone
+- **Bookmarks** (SQLite, D13):
+  - "Add bookmark" in the player saves the moment with a name. Inside a transmission it points at the transmission's start.
+  - a Bookmarks view on the recordings page, with flags on the waveforms
+  - every bookmark has its own address (`/recordings?bookmark=<id>`), which the page always shows, plus a Copy link button
+  - rename and delete
+  - ids are never reused, so an old link cannot open a different bookmark
+  - bookmarks store the final file name, so one made in the hour being recorded still works after the `.tmp` is renamed
+
+- **One player for the whole UI:** live and recordings share the bar at the bottom, with a loading indicator and volume, and playback carries on between pages. Live audio is decoded in the page (see Findings) and runs about 0.5 s behind the receiver.
 
 **Next**
 - [ ] **Access control.** Today everything is open. Before the hub is reachable from the internet, the recordings and (later) config editing need a login, or the hub needs a way to limit them to the LAN.
 - [x] Publish images: GitHub Actions builds both images for amd64 and arm64 on native runners and publishes them to ghcr. The fork's upstream workflows are kept but only run by hand. `deploy.sh` pulls the images, and `--build` still builds on the host.
-- [ ] Store transmission history in SQLite (a file in the data folder, no database server), so the dashboard's history survives restarts and can go back X days.
+- [ ] Store transmission history in SQLite too (`hub.db`, D13), so the dashboard's history survives restarts and can go back X days.
 - [ ] Pull requests for the two RTLSDR-Airband branches (`dev/metrics_endpoint`, `dev/docker_build_options`, both pushed), first to the fork and maybe upstream later.
 - [ ] Config editing (the end goal): edit `rtl_airband.conf`, starting with the scan list, in the hub. Back it up before writing, then restart (D12).
 - [ ] Check the dashboard at phone width and in light mode.
@@ -118,7 +128,6 @@ Prometheus ── scrapes airband /metrics directly
 - Continue playback into the next hour
 - Zoom the waveform by dragging
 - A whole-day "transmissions only" playlist
-- Bookmarks on interesting points in the recordings
 - A low-latency path: `udp_stream` PCM sent to the browser over WebSocket
 - The hub's own metrics (listeners, relay health)
 
@@ -145,6 +154,12 @@ It is the Icecast 2 "SOURCE" protocol, **not PUT**:
    It is also tried without auth first and then with Basic auth.
    The expected reply is `200` with an `<iceresponse>` XML body.
    It is sent `shout_metadata_delay` (3 s) after the retune, so it lines up with the audio.
+
+### Live playback in the browser (measured 2026-11-19)
+- Given the stream URL, Chrome buffers about 130 KB before it starts, which is about 22 s at 6 KB/s. It then plays from the start of that buffer, so it stays about 20.5 s behind for the whole session. Firefox stays about 5 s behind.
+- Media Source Extensions fix this in Chrome, but Firefox does not accept a raw MP3 stream (`audio/mpeg`) there.
+- **Decision:** the page reads the stream itself, splits it into frames, decodes them with WebCodecs (`AudioDecoder`, which both browsers support for MP3, 8 kHz included) and schedules them in Web Audio with a 0.4 s cushion (`web/src/liveDecoder.ts`). Measured: about 0.6 s behind in Firefox and Chrome.
+- WebCodecs needs a secure context: https or localhost. Over plain http the player falls back to the browser's own buffering.
 
 ### Behaviour seen in use
 - **Silent after connecting:** rtl_airband connects its outputs before the dongle is running and sends no
@@ -179,6 +194,6 @@ It is the Icecast 2 "SOURCE" protocol, **not PUT**:
 - **Losing LiveATC-style feeding:** a second `icecast` output to an external
   server is still possible if it's ever needed.
 - **Security:** the hub has no login yet. Anyone who can reach it can listen, browse and
-  download all recordings, and later edit the config. Do not forward its port to the
+  download all recordings, add, rename and delete bookmarks, and later edit the config. Do not forward its port to the
   internet until access control exists. `docker.sock` must never be mounted directly; use
   a proxy that only allows restarting the rtl_airband container.

@@ -156,7 +156,11 @@ func (l *Library) refresh(r Recording) (Recording, error) {
 	info, err := l.root.Stat(r.Path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return Recording{}, ErrNotFound // e.g. the .tmp was just renamed
+			// e.g. the .tmp was just renamed: the cached list is out of date
+			l.mu.Lock()
+			l.scanned = time.Time{}
+			l.mu.Unlock()
+			return Recording{}, ErrNotFound
 		}
 		return Recording{}, err
 	}
