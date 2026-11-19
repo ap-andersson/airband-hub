@@ -129,9 +129,11 @@ devices: ({
 
 Then open `http://<host>:8090/` for the dashboard, or play `http://<host>:8090/atc.mp3` in VLC.
 
-> [!WARNING]
-> The hub has **no login yet**. Anyone who can reach it can listen, browse and download every
-> recording. Keep it on your LAN until access control exists, which is on the roadmap.
+> [!NOTE]
+> Viewing and listening are open to anyone who can reach the hub: the dashboard, the live
+> stream and every recording. Changes (adding, renaming and deleting bookmarks) need the
+> passphrase in `HUB_ADMIN_PASSPHRASE`. If you expose the hub to the internet, put it behind a
+> reverse proxy with https, so the passphrase is not sent in the clear.
 
 ## Configuration
 
@@ -148,7 +150,9 @@ The hub is configured with environment variables. In the stack, put them in `DEP
 | `HUB_METRICS_INTERVAL` | `1s` | How often to read it |
 | `HUB_RECORDINGS_DIR` | (unset) | rtl_airband's file output folder, read-only. Without it there is no recordings page. The stack sets it. |
 | `HUB_RECORDINGS_LOCALTIME` | `false` | `true` if rtl_airband runs with `localtime = true`, so file names are in `TZ` instead of UTC |
-| `HUB_DATA_DIR` | (unset) | Writable folder for the waveform cache (about 6 KB per recorded hour) and `hub.db`, the SQLite file that holds bookmarks. Without it, waveforms are only kept in memory, older recordings are not analysed ahead of time, and there are no bookmarks. The stack sets it. |
+| `HUB_TITLE` | (unset) | The title at the top of the UI. Without it, the stream's name from rtl_airband's `icecast` output is used. |
+| `HUB_ADMIN_PASSPHRASE` | (unset) | The passphrase for changes. The UI asks for it the first time you change something, and remembers the login for 90 days (also across restarts). Without it nothing can be changed. Changing it logs everyone out. |
+| `HUB_DATA_DIR` | (unset) | Writable folder for the waveform cache (about 6 KB per recorded hour) and `hub.db`, the SQLite file that holds bookmarks and the last 36 hours of transmissions. Without it, waveforms are only kept in memory, older recordings are not analysed ahead of time, there are no bookmarks, and the transmission history starts empty on every restart. The stack sets it. |
 | `HUB_BACKFILL_PAUSE` | `1s` | Pause between analysing older recordings in the background |
 | `HUB_BURST_BYTES` | `0` | Recent audio sent to a new listener at once. Playback starts sooner, but the player then stays that far behind live: 24576 is ~4 s at 48 kbit/s. |
 | `HUB_SOURCE_TIMEOUT` | `30s` | Drop a source that sends nothing for this long. rtl_airband is silent for ~10 s after connecting while the dongle starts. |
@@ -185,7 +189,8 @@ cached between builds.
 | `GET /api/live` | The dashboard's state as JSON; `/api/live/stream` pushes it every second as server-sent events |
 | `GET /api/mounts` | Mounts with their title, listeners and source state |
 | `GET /api/recordings/...` | Days, recordings, waveforms, audio from an exact time, downloads ([handlers](internal/recordings/handlers.go)) |
-| `GET`/`POST /api/bookmarks`, `GET`/`PATCH`/`DELETE /api/bookmarks/{id}` | Bookmarks: list, add `{"name", "path", "offset"}`, get, rename `{"name"}`, delete ([handlers](internal/recordings/bookmarks.go)) |
+| `GET`/`POST /api/bookmarks`, `GET`/`PATCH`/`DELETE /api/bookmarks/{id}` | Bookmarks: list, add `{"name", "path", "offset"}`, get, rename `{"name"}`, delete ([handlers](internal/recordings/bookmarks.go)). Adding, renaming and deleting need a login. |
+| `POST /api/login`, `POST /api/logout` | Log in with `{"passphrase"}`, which sets a session cookie, or log out ([auth](internal/auth/auth.go)) |
 | `SOURCE`/`PUT /<mount>`, `GET /admin/metadata` | The Icecast source side, for rtl_airband |
 | `GET /healthz` | Liveness |
 

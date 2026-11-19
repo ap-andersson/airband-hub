@@ -1,3 +1,5 @@
+import { requestLogin } from "./login";
+
 // Shapes of the hub's /api/live payload (internal/hub and internal/airband in Go).
 
 export interface StreamInfo {
@@ -53,10 +55,13 @@ export interface Transmission {
 
 export interface Live {
   time: string;
+  title?: string; // HUB_TITLE; otherwise the stream's name is the title
   mounts: Mount[];
   metrics_enabled: boolean;
   recordings_enabled: boolean;
   bookmarks_enabled: boolean;
+  edits_enabled: boolean; // an admin passphrase is set
+  logged_in: boolean;
   receiver: Receiver;
   frequencies: Frequency[];
   recent: Transmission[];
@@ -105,13 +110,20 @@ export interface Bookmark {
   recording: Recording | null; // null once the file is gone
 }
 
-// Sends a JSON request; resolves to the decoded body, or null for 204 No Content.
+// Sends a JSON request that changes something; resolves to the decoded body, or null for 204
+// No Content. When the hub wants a login, it asks for the passphrase and tries once more.
 export async function apiSend<T>(method: string, url: string, body?: unknown): Promise<T | null> {
-  const r = await fetch(url, {
-    method,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const send = () =>
+    fetch(url, {
+      method,
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  let r = await send();
+  if (r.status === 401) {
+    await requestLogin();
+    r = await send();
+  }
   if (!r.ok) throw new Error((await r.text()).trim() || r.statusText);
   return r.status === 204 ? null : ((await r.json()) as T);
 }

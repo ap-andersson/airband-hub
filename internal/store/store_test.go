@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/ap-andersson/airband-hub/internal/airband"
 )
 
 func open(t *testing.T) (*Store, string) {
@@ -121,5 +123,30 @@ func TestPragmasApply(t *testing.T) {
 	s.db.QueryRow("PRAGMA foreign_keys").Scan(&fk)
 	if mode != "wal" || timeout != 5000 || fk != 1 {
 		t.Fatalf("journal_mode %q, busy_timeout %d, foreign_keys %d", mode, timeout, fk)
+	}
+}
+
+func TestTransmissionsRoundTripAndPrune(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
+	tx := func(end time.Time, freq string) airband.Transmission {
+		return airband.Transmission{Start: end.Add(-2 * time.Second), End: end, Freq: freq, Label: "TWR " + freq, DurationSeconds: 2, SNRMinDB: 10, SNRMaxDB: 15}
+	}
+	old, recent := tx(t0.Add(-40*time.Hour), "118.805"), tx(t0, "129.800")
+	recent.Approximate = true
+	if err := s.AddTransmissions(ctx, []airband.Transmission{old, recent}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Transmissions(ctx, t0.Add(-36*time.Hour))
+	if err != nil || len(got) != 1 || got[0] != recent {
+		t.Fatalf("got %+v, %v; want only %+v", got, err, recent)
+	}
+	n, err := s.PruneTransmissions(ctx, t0.Add(-36*time.Hour))
+	if err != nil || n != 1 {
+		t.Fatalf("pruned %d, %v", n, err)
+	}
+	if all, _ := s.Transmissions(ctx, time.Time{}); len(all) != 1 {
+		t.Fatalf("left %+v", all)
 	}
 }

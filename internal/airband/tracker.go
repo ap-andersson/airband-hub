@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	keepTransmissions = 24 * time.Hour
+	keepTransmissions = 36 * time.Hour
 	maxTransmissions  = 5000
 	recentLimit       = 50
 	rateWindow        = 10 * time.Second
@@ -66,7 +66,11 @@ type deviceCounters struct {
 
 // Tracker keeps the latest scrape and the transmissions seen since the hub started.
 type Tracker struct {
+	// OnRecord, if set, gets each batch of new transmissions, outside the lock (to store them)
+	OnRecord func([]Transmission)
+
 	mu       sync.Mutex
+	added    []Transmission // recorded by the current Update, for OnRecord
 	last     *Sample
 	receiver Receiver
 	txs      []Transmission // oldest first
@@ -76,10 +80,25 @@ type Tracker struct {
 
 func NewTracker() *Tracker { return &Tracker{} }
 
+// Restore puts transmissions from an earlier run (oldest first) back into the history.
+func (t *Tracker) Restore(txs []Transmission) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.txs = append(append([]Transmission{}, txs...), t.txs...)
+	t.pruneLocked(time.Now())
+}
+
 func (t *Tracker) Update(s Sample, now time.Time) {
+	if added := t.update(s, now); len(added) > 0 && t.OnRecord != nil {
+		t.OnRecord(added)
+	}
+}
+
+func (t *Tracker) update(s Sample, now time.Time) []Transmission {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.now = now
+	t.added = nil
 
 	if t.last != nil {
 		prev := map[string]FreqSample{}
@@ -115,6 +134,7 @@ func (t *Tracker) Update(s Sample, now time.Time) {
 			}
 		}
 	}
+	return t.added
 }
 
 // Fail records a failed scrape. Squelch states are cleared, since they can no longer be trusted.
@@ -145,6 +165,7 @@ func (t *Tracker) recordLocked(prev, cur FreqSample, now time.Time) {
 	tx.Start = now.Add(-time.Duration(tx.DurationSeconds * float64(time.Second)))
 	for i := uint64(0); i < n; i++ {
 		t.txs = append(t.txs, tx)
+		t.added = append(t.added, tx)
 	}
 }
 

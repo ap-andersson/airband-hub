@@ -139,3 +139,26 @@ func TestFailureKeepsLastLevelsButMarksReceiverDown(t *testing.T) {
 		t.Fatalf("stale squelch state shown as open: %+v", st.Frequencies)
 	}
 }
+
+func TestRecordedTransmissionsAreHandedOnAndRestored(t *testing.T) {
+	tr := NewTracker()
+	var got []Transmission
+	tr.OnRecord = func(added []Transmission) { got = append(got, added...) }
+	tr.Update(sample(5, 20, snrBuckets(0, 1, 5, 5), false), t0)
+	tr.Update(sample(6, 23.5, snrBuckets(0, 1, 6, 6), false), t0.Add(time.Second))
+	if len(got) != 1 || got[0].DurationSeconds != 3.5 {
+		t.Fatalf("handed on %+v", got)
+	}
+
+	// a restarted hub gets them back, older than what it records itself
+	tr2 := NewTracker()
+	tr2.Update(sample(6, 23.5, snrBuckets(0, 1, 6, 6), false), time.Now())
+	tr2.Update(sample(7, 25, snrBuckets(0, 1, 7, 7), false), time.Now())
+	old := got[0]
+	old.Start, old.End = time.Now().Add(-time.Hour), time.Now().Add(-time.Hour+3*time.Second)
+	tr2.Restore([]Transmission{old})
+	recent := tr2.State().Recent
+	if len(recent) != 2 || !recent[1].End.Equal(old.End) {
+		t.Fatalf("recent after restore %+v", recent)
+	}
+}

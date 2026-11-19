@@ -116,9 +116,10 @@ Prometheus ── scrapes airband /metrics directly
 - **One player for the whole UI:** live and recordings share the bar at the bottom, with a loading indicator and volume, and playback carries on between pages. Live audio is decoded in the page (see Findings) and runs about 0.5 s behind the receiver.
 
 **Next**
-- [ ] **Access control.** Today everything is open. Before the hub is reachable from the internet, the recordings and (later) config editing need a login, or the hub needs a way to limit them to the LAN.
+- [x] **Access control:** viewing stays open; every change needs the passphrase in `HUB_ADMIN_PASSPHRASE`. Logging in sets an HttpOnly, SameSite=Strict cookie signed with a key kept in the data folder (so logins survive restarts) and mixed with the passphrase (so changing it logs everyone out). Wrong guesses are slowed down and limited to 10 per 10 minutes.
 - [x] Publish images: GitHub Actions builds both images for amd64 and arm64 on native runners and publishes them to ghcr. The fork's upstream workflows are kept but only run by hand. `deploy.sh` pulls the images, and `--build` still builds on the host.
-- [ ] Store transmission history in SQLite too (`hub.db`, D13), so the dashboard's history survives restarts and can go back X days.
+- [x] Store the transmission history in SQLite too (`hub.db`, D13): the last 36 hours, loaded back on start, so the dashboard's history survives restarts.
+- [ ] Show more of the stored history than the 50 most recent transmissions (per frequency, per hour).
 - [ ] Pull requests for the two RTLSDR-Airband branches (`dev/metrics_endpoint`, `dev/docker_build_options`, both pushed), first to the fork and maybe upstream later.
 - [ ] Config editing (the end goal): edit `rtl_airband.conf`, starting with the scan list, in the hub. Back it up before writing, then restart (D12).
 - [ ] Check the dashboard at phone width and in light mode.
@@ -193,7 +194,8 @@ It is the Icecast 2 "SOURCE" protocol, **not PUT**:
   must not trust the Xing header. Scan the frames instead.
 - **Losing LiveATC-style feeding:** a second `icecast` output to an external
   server is still possible if it's ever needed.
-- **Security:** the hub has no login yet. Anyone who can reach it can listen, browse and
-  download all recordings, add, rename and delete bookmarks, and later edit the config. Do not forward its port to the
-  internet until access control exists. `docker.sock` must never be mounted directly; use
-  a proxy that only allows restarting the rtl_airband container.
+- **Security:** anyone who can reach the hub can listen and browse and download all
+  recordings. Changes need the admin passphrase; over plain http it travels in the clear, so
+  the public address must be https. The guessing limit is shared by everyone, so someone
+  guessing can lock the owner out for up to 10 minutes. `docker.sock` must never be mounted
+  directly; use a proxy that only allows restarting the rtl_airband container.

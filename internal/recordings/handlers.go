@@ -14,6 +14,7 @@ import (
 	"time"
 	_ "time/tzdata" // distroless has no zoneinfo; the browser's zone arrives as an IANA name
 
+	"github.com/ap-andersson/airband-hub/internal/auth"
 	"github.com/ap-andersson/airband-hub/internal/mp3"
 	"github.com/ap-andersson/airband-hub/internal/store"
 )
@@ -23,7 +24,9 @@ type Handlers struct {
 	Analyzer *Analyzer
 	// Store keeps bookmarks; nil when there is no data directory, and then there are none.
 	Store *store.Store
-	Log   *slog.Logger
+	// Auth guards adding, renaming and deleting bookmarks.
+	Auth *auth.Auth
+	Log  *slog.Logger
 }
 
 // Register adds:

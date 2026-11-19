@@ -30,8 +30,3 @@ export function snr(min: number, max: number): string {
   if (min === max) return `≥ ${min} dB`;
   return `${min}–${max} dB`;
 }
-
-// Go's zero time.Time marshals as year 1.
-export function isSet(iso: string): boolean {
-  return !!iso && !iso.startsWith("0001-");
-}

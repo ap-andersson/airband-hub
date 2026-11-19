@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ap-andersson/airband-hub/internal/airband"
 	_ "modernc.org/sqlite"
 )
 
@@ -24,6 +25,18 @@ var migrations = []string{
 		created_at INTEGER NOT NULL  -- Unix milliseconds
 	);
 	CREATE INDEX bookmarks_at ON bookmarks (at);`,
+
+	`CREATE TABLE transmissions (
+		start_ms    INTEGER NOT NULL, -- Unix milliseconds
+		end_ms      INTEGER NOT NULL,
+		freq        TEXT    NOT NULL,
+		label       TEXT    NOT NULL,
+		duration_s  REAL    NOT NULL,
+		snr_min_db  REAL    NOT NULL, -- both 0 when unknown
+		snr_max_db  REAL    NOT NULL,
+		approximate INTEGER NOT NULL  -- 1 when several ended within one scrape
+	);
+	CREATE INDEX transmissions_end ON transmissions (end_ms);`,
 }
 
 type Store struct {
@@ -160,4 +173,52 @@ func (s *Store) changeOne(ctx context.Context, query string, args ...any) error 
 		return ErrNotFound
 	}
 	return nil
+}
+
+// AddTransmissions stores transmissions as the tracker records them.
+func (s *Store) AddTransmissions(ctx context.Context, txs []airband.Transmission) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, t := range txs {
+		if _, err := tx.ExecContext(ctx,
+			"INSERT INTO transmissions (start_ms, end_ms, freq, label, duration_s, snr_min_db, snr_max_db, approximate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			t.Start.UnixMilli(), t.End.UnixMilli(), t.Freq, t.Label, t.DurationSeconds, t.SNRMinDB, t.SNRMaxDB, t.Approximate); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// Transmissions returns those that ended at or after since, oldest first.
+func (s *Store) Transmissions(ctx context.Context, since time.Time) ([]airband.Transmission, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT start_ms, end_ms, freq, label, duration_s, snr_min_db, snr_max_db, approximate FROM transmissions WHERE end_ms >= ? ORDER BY end_ms, rowid",
+		since.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []airband.Transmission{}
+	for rows.Next() {
+		var t airband.Transmission
+		var start, end int64
+		if err := rows.Scan(&start, &end, &t.Freq, &t.Label, &t.DurationSeconds, &t.SNRMinDB, &t.SNRMaxDB, &t.Approximate); err != nil {
+			return nil, err
+		}
+		t.Start, t.End = time.UnixMilli(start).UTC(), time.UnixMilli(end).UTC()
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// PruneTransmissions deletes those that ended before before, and says how many.
+func (s *Store) PruneTransmissions(ctx context.Context, before time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, "DELETE FROM transmissions WHERE end_ms < ?", before.UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }

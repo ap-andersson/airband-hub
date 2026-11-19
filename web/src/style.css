@@ -122,11 +122,30 @@ code {
 
 /* Header */
 
+.header {
+  margin-bottom: 1.5rem;
+}
+
+.header h1 {
+  margin-bottom: 1.3rem;
+}
+
+/* the page links on the left, the live stream on the right */
+.menubar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.3rem;
+  background: var(--strip);
+  border: 1px solid var(--strip-edge);
+  border-radius: 999px;
+}
+
 .nav {
-  flex-basis: 100%;
   display: flex;
   gap: 0.25rem;
-  margin-bottom: 0.5rem;
 }
 
 .nav a {
@@ -134,8 +153,8 @@ code {
   text-decoration: none;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 1.2rem;
-  padding: 0.35rem 1.1rem;
+  font-size: 1.15rem;
+  padding: 0.3rem 1.1rem;
   border-radius: 999px;
 }
 
@@ -145,36 +164,96 @@ code {
 
 .nav a[aria-current="page"] {
   color: var(--ink);
-  background: var(--strip);
+  background: var(--page);
   box-shadow: inset 0 0 0 1px var(--strip-edge);
 }
 
-.header {
+.menubar-right {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem 2rem;
-  padding-bottom: 1.25rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--strip-edge);
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.last-heard {
-  margin: 0.25rem 0 0;
+.logout {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink-2);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
-.last-heard strong {
+.logout:hover {
   color: var(--ink);
-  font-weight: 600;
 }
 
+/* the passphrase dialog */
+dialog.login {
+  width: min(24rem, calc(100vw - 2rem));
+  padding: 1.25rem;
+  border: 1px solid var(--strip-edge);
+  border-radius: 6px;
+  background: var(--strip);
+  color: var(--ink);
+}
+
+dialog.login::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+
+dialog.login form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+dialog.login label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+dialog.login input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--strip-edge);
+  border-radius: 4px;
+  background: var(--page);
+  color: var(--ink);
+}
+
+.login-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.login-buttons button {
+  font: 600 0.9rem var(--font-body);
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--strip-edge);
+  border-radius: 4px;
+  background: var(--page);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* listener count and the play button as one control */
 .listen {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
+  border: 1px solid var(--strip-edge);
+  border-radius: 999px;
+  background: var(--page);
+}
+
+.listen .stream-status {
+  padding: 0 0.9rem;
+  font-size: 0.9rem;
+  border-right: 1px solid var(--strip-edge);
+  align-self: stretch;
 }
 
 .listen-button {
@@ -182,12 +261,16 @@ code {
   align-items: center;
   gap: 0.5rem;
   font: 600 1rem var(--font-body);
-  padding: 0.55rem 1.1rem 0.55rem 0.9rem;
-  border-radius: 999px;
-  border: 1px solid var(--strip-edge);
-  background: var(--strip);
+  padding: 0.4rem 1.1rem 0.4rem 0.9rem;
+  border-radius: 0 999px 999px 0;
+  border: 0;
+  background: transparent;
   color: var(--ink);
   cursor: pointer;
+}
+
+.listen-button:hover {
+  background: var(--strip);
 }
 
 .listen-button svg {
@@ -196,9 +279,9 @@ code {
   fill: currentColor;
 }
 
-.listen-button.playing {
+.listen-button.playing,
+.listen-button.playing:hover {
   background: var(--on-air);
-  border-color: var(--on-air);
   color: var(--on-air-ink);
 }
 
@@ -297,7 +380,7 @@ code {
 
 .strip {
   display: grid;
-  grid-template-columns: 7.5rem minmax(0, 1fr) 17rem;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 18.5rem;
   align-items: stretch;
   background: var(--strip);
   border: 1px solid var(--strip-edge);
@@ -469,8 +552,61 @@ code {
   margin-top: 2rem;
 }
 
-.lower h2 {
-  margin-bottom: 0.5rem;
+.lower {
+  align-items: start;
+}
+
+/* Recent transmissions and Receiver: boxes like the frequency strips, foldable */
+.panel {
+  background: var(--strip);
+  border: 1px solid var(--strip-edge);
+  border-radius: 4px;
+}
+
+.panel summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.panel summary::-webkit-details-marker {
+  display: none;
+}
+
+/* a chevron that points down when open and right when folded */
+.panel summary::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid var(--ink-3);
+  border-bottom: 2px solid var(--ink-3);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.panel[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.panel summary:hover::before {
+  border-color: var(--ink);
+}
+
+.panel[open] summary {
+  border-bottom: 1px solid var(--strip-edge);
+}
+
+.panel-body {
+  padding: 0.5rem 1rem 0.85rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel summary::before {
+    transition: none;
+  }
 }
 
 table {
@@ -494,6 +630,59 @@ td {
 
 .num {
   text-align: right;
+}
+
+/* Recent transmissions: back-to-back ones on a frequency fold into one row */
+tr.group {
+  cursor: pointer;
+}
+
+tr.group:hover td {
+  background: var(--page);
+}
+
+.group-toggle {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.group-toggle::before {
+  content: "";
+  width: 0.35rem;
+  height: 0.35rem;
+  border-right: 2px solid var(--ink-3);
+  border-bottom: 2px solid var(--ink-3);
+  transform: rotate(-45deg);
+}
+
+tr.group.open .group-toggle::before {
+  transform: rotate(45deg);
+}
+
+.group-count {
+  margin-left: 0.25rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--page);
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+tr.sub td {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+tr.sub td:first-child {
+  padding-left: 1.15rem;
 }
 
 .health {

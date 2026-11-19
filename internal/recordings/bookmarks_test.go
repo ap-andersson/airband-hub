@@ -15,6 +15,9 @@ func send(t *testing.T, method, url, body string) (*http.Response, []byte) {
 	t.Helper()
 	req, _ := http.NewRequest(method, url, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	if adminCookie != nil {
+		req.AddCookie(adminCookie)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -125,5 +128,23 @@ func TestBookmarkInputIsChecked(t *testing.T) {
 	get(t, srv.URL+"/api/bookmarks", &list)
 	if list == nil || len(list) != 0 {
 		t.Fatalf("an empty list must be [], got %+v", list)
+	}
+}
+
+func TestBookmarkChangesNeedLogin(t *testing.T) {
+	srv, _, _ := setup(t)
+	adminCookie = nil
+	for _, c := range []struct{ method, path, body string }{
+		{"POST", "/api/bookmarks", `{"name":"x","path":"2026/11/18/essl_20261118_16.mp3","offset":1}`},
+		{"PATCH", "/api/bookmarks/1", `{"name":"y"}`},
+		{"DELETE", "/api/bookmarks/1", ""},
+	} {
+		if resp, _ := send(t, c.method, srv.URL+c.path, c.body); resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("%s %s without login: %d", c.method, c.path, resp.StatusCode)
+		}
+	}
+	var list []BookmarkView
+	if resp := get(t, srv.URL+"/api/bookmarks", &list); resp.StatusCode != http.StatusOK {
+		t.Fatalf("reading needs no login: %d", resp.StatusCode)
 	}
 }

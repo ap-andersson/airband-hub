@@ -1,6 +1,8 @@
-import { useEffect } from "preact/hooks";
+import { Fragment, type ComponentChildren } from "preact";
+import { useEffect, useState } from "preact/hooks";
 import type { Frequency, Live, Mount, Receiver, Transmission } from "./api";
-import { ago, clock, isSet, seconds, snr, stationName } from "./format";
+import { ago, clock, seconds, snr, stationName } from "./format";
+import { LoginDialog, logout, useLoggedIn } from "./login";
 import { PlayerBar, PlayerProvider, usePlayer } from "./player";
 import { Recordings } from "./Recordings";
 import { Link, useLocation } from "./router";
@@ -21,13 +23,15 @@ function Shell() {
   const mount = live?.mounts[0];
   const page = url.pathname.startsWith("/recordings") ? "recordings" : "live";
 
+  const title = live?.title || mount?.info.name || "Airband hub";
   useEffect(() => {
-    document.title = page === "recordings" ? "Recordings, airband hub" : "Airband hub";
-  }, [page]);
+    document.title = page === "recordings" ? `Recordings, ${title}` : title;
+  }, [page, title]);
 
   return (
     <div class="page">
-      <Header mount={mount} connection={connection} now={now} page={page} recordingsEnabled={!!live?.recordings_enabled} />
+      <Header title={title} mount={mount} connection={connection} page={page} recordingsEnabled={!!live?.recordings_enabled} loggedIn={!!live?.logged_in} />
+      <LoginDialog />
       {live === null ? (
         <p class="empty">{connection === "lost" ? "Cannot reach the hub. Retrying…" : "Connecting to the hub…"}</p>
       ) : page === "recordings" ? (
@@ -50,11 +54,27 @@ function Shell() {
   );
 }
 
-function Header({ mount, connection, now, page, recordingsEnabled }: { mount?: Mount; connection: Connection; now: Date; page: string; recordingsEnabled: boolean }) {
-  const name = mount?.info.name || "Airband hub";
+function Header({
+  title,
+  mount,
+  connection,
+  page,
+  recordingsEnabled,
+  loggedIn: hubSaysLoggedIn,
+}: {
+  title: string;
+  mount?: Mount;
+  connection: Connection;
+  page: string;
+  recordingsEnabled: boolean;
+  loggedIn: boolean;
+}) {
+  const loggedIn = useLoggedIn(hubSaysLoggedIn);
   return (
     <header class="header">
-      <nav class="nav" aria-label="Pages">
+      <h1>{title}</h1>
+      <div class="menubar">
+        <nav class="nav" aria-label="Pages">
         <Link href="/" current={page === "live"}>
           Live
         </Link>
@@ -63,18 +83,16 @@ function Header({ mount, connection, now, page, recordingsEnabled }: { mount?: M
             Recordings
           </Link>
         )}
-      </nav>
-      <div class="station">
-        <h1>{name}</h1>
-        {mount && isSet(mount.title_updated) ? (
-          <p class="last-heard">
-            Last active <strong>{mount.title}</strong>, {ago(mount.title_updated, now)}
-          </p>
-        ) : (
-          <p class="last-heard">No transmission since the receiver started</p>
-        )}
+        </nav>
+        <div class="menubar-right">
+          {loggedIn && (
+            <button type="button" class="logout" onClick={logout}>
+              Log out
+            </button>
+          )}
+          <Listen mount={mount} connection={connection} />
+        </div>
       </div>
-      <Listen mount={mount} connection={connection} />
     </header>
   );
 }
@@ -94,6 +112,10 @@ function Listen({ mount, connection }: { mount?: Mount; connection: Connection }
 
   return (
     <div class="listen">
+      <span class={live ? "stream-status ok" : "stream-status bad"}>
+        <StatusIcon ok={live} />
+        {status}
+      </span>
       <button
         type="button"
         class={`listen-button${on ? " playing" : ""}${loading ? " loading" : ""}`}
@@ -111,10 +133,6 @@ function Listen({ mount, connection }: { mount?: Mount; connection: Connection }
         )}
         {loading ? "Connecting…" : on ? "Stop" : "Listen live"}
       </button>
-      <span class={live ? "stream-status ok" : "stream-status bad"}>
-        <StatusIcon ok={live} />
-        {status}
-      </span>
     </div>
   );
 }
@@ -236,10 +254,48 @@ function Strip({ f, stale }: { f: Frequency; stale: boolean }) {
   );
 }
 
-function Recent({ recent, metricsEnabled, now }: { recent: Transmission[]; metricsEnabled: boolean; now: Date }) {
+const GROUP_GAP = 10; // seconds; closer transmissions on one frequency form a group
+
+// recent is newest first; a group collects back-to-back transmissions on one frequency
+function groupRecent(recent: Transmission[]): Transmission[][] {
+  const groups: Transmission[][] = [];
+  for (const t of recent) {
+    const g = groups.at(-1);
+    const older = g?.at(-1);
+    if (g && older && older.freq === t.freq && (new Date(older.start).getTime() - new Date(t.end).getTime()) / 1000 < GROUP_GAP) g.push(t);
+    else groups.push([t]);
+  }
+  return groups;
+}
+
+function TxRow({ t, now, sub }: { t: Transmission; now: Date; sub?: boolean }) {
   return (
-    <section class="recent" aria-labelledby="recent-title">
-      <h2 id="recent-title">Recent transmissions</h2>
+    <tr class={sub ? "sub" : undefined}>
+      <td title={ago(t.start, now)}>{clock(t.start)}</td>
+      <td>
+        <span class="mhz-small">{t.freq}</span> {stationName(t.label, t.freq)}
+      </td>
+      <td class="num">
+        {t.approximate && <span title="Several ended within one second; this is their average">≈ </span>}
+        {seconds(t.duration_seconds)}
+      </td>
+      <td class="num">{snr(t.snr_min_db, t.snr_max_db)}</td>
+    </tr>
+  );
+}
+
+function Recent({ recent, metricsEnabled, now }: { recent: Transmission[]; metricsEnabled: boolean; now: Date }) {
+  // keyed by the group's first transmission, which stays put while newer ones join it
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (key: string) =>
+    setOpen((o) => {
+      const n = new Set(o);
+      if (!n.delete(key)) n.add(key);
+      return n;
+    });
+
+  return (
+    <Panel id="recent" title="Recent transmissions">
       {!metricsEnabled ? (
         <p class="empty">Needs rtl_airband's metrics.</p>
       ) : recent.length === 0 ? (
@@ -259,23 +315,39 @@ function Recent({ recent, metricsEnabled, now }: { recent: Transmission[]; metri
             </tr>
           </thead>
           <tbody>
-            {recent.map((t, i) => (
-              <tr key={`${t.end}-${t.freq}-${i}`}>
-                <td title={ago(t.start, now)}>{clock(t.start)}</td>
-                <td>
-                  <span class="mhz-small">{t.freq}</span> {stationName(t.label, t.freq)}
-                </td>
-                <td class="num">
-                  {t.approximate && <span title="Several ended within one second; this is their average">≈ </span>}
-                  {seconds(t.duration_seconds)}
-                </td>
-                <td class="num">{snr(t.snr_min_db, t.snr_max_db)}</td>
-              </tr>
-            ))}
+            {groupRecent(recent).map((g) => {
+              const first = g.at(-1)!;
+              const key = `${first.start}-${first.freq}`;
+              if (g.length === 1) return <TxRow key={key} t={first} now={now} />;
+              const isOpen = open.has(key);
+              const snrs = g.filter((t) => t.snr_min_db !== 0 || t.snr_max_db !== 0);
+              return (
+                <Fragment key={key}>
+                  <tr class={isOpen ? "group open" : "group"} onClick={() => toggle(key)}>
+                    <td title={ago(first.start, now)}>
+                      <button type="button" class="group-toggle" aria-expanded={isOpen}>
+                        {clock(first.start)}
+                      </button>
+                    </td>
+                    <td>
+                      <span class="mhz-small">{first.freq}</span> {stationName(first.label, first.freq)}{" "}
+                      <span class="group-count">{g.length} transmissions</span>
+                    </td>
+                    <td class="num" title="Total airtime">
+                      {seconds(g.reduce((sum, t) => sum + t.duration_seconds, 0))}
+                    </td>
+                    <td class="num">
+                      {snrs.length ? snr(Math.min(...snrs.map((t) => t.snr_min_db)), Math.max(...snrs.map((t) => t.snr_max_db))) : "–"}
+                    </td>
+                  </tr>
+                  {isOpen && g.map((t, i) => <TxRow key={`${key}-${i}`} t={t} now={now} sub />)}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       )}
-    </section>
+    </Panel>
   );
 }
 
@@ -283,8 +355,7 @@ function ReceiverPanel({ receiver, metricsEnabled }: { receiver: Receiver; metri
   if (!metricsEnabled) return null;
   const clipping = receiver.clipping_ratio;
   return (
-    <section class="receiver" aria-labelledby="receiver-title">
-      <h2 id="receiver-title">Receiver</h2>
+    <Panel id="receiver" title="Receiver">
       <p class={receiver.ok ? "health ok" : "health bad"}>
         <StatusIcon ok={receiver.ok} />
         {receiver.ok ? "rtl_airband is running" : `No metrics from rtl_airband: ${receiver.error}`}
@@ -307,6 +378,36 @@ function ReceiverPanel({ receiver, metricsEnabled }: { receiver: Receiver; metri
           <dd>{receiver.version || "–"}</dd>
         </div>
       </dl>
-    </section>
+    </Panel>
+  );
+}
+
+// A box that can be folded away; whether it is folded is remembered per browser.
+function Panel({ id, title, children }: { id: string; title: string; children: ComponentChildren }) {
+  const key = `hub.collapsed.${id}`;
+  const [open] = useState(() => {
+    try {
+      return localStorage.getItem(key) !== "1";
+    } catch {
+      return true;
+    }
+  });
+  return (
+    <details
+      class={`panel ${id}`}
+      open={open}
+      onToggle={(e) => {
+        try {
+          localStorage.setItem(key, e.currentTarget.open ? "0" : "1");
+        } catch {
+          /* not remembered, still folded */
+        }
+      }}
+    >
+      <summary>
+        <h2>{title}</h2>
+      </summary>
+      <div class="panel-body">{children}</div>
+    </details>
   );
 }

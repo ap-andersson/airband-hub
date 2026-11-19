@@ -10,11 +10,16 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ap-andersson/airband-hub/internal/auth"
 	"github.com/ap-andersson/airband-hub/internal/store"
 )
+
+// adminCookie is the login of the latest setup; send uses it for writes
+var adminCookie *http.Cookie
 
 func TestParseName(t *testing.T) {
 	cases := []struct {
@@ -74,11 +79,21 @@ func setup(t *testing.T) (*httptest.Server, string, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	h := &Handlers{Library: lib, Analyzer: &Analyzer{Library: lib, DataDir: data, Log: log}, Store: db, Log: log}
+	a, err := auth.New("test phrase", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &Handlers{Library: lib, Analyzer: &Analyzer{Library: lib, DataDir: data, Log: log}, Store: db, Auth: a, Log: log}
 	mux := http.NewServeMux()
 	h.Register(mux)
+	a.Register(mux)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
+	resp, err := http.Post(srv.URL+"/api/login", "application/json", strings.NewReader(`{"passphrase":"test phrase"}`))
+	if err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("login: %v %v", resp, err)
+	}
+	adminCookie = resp.Cookies()[0]
 	return srv, dir, data
 }
 

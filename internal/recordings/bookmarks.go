@@ -27,12 +27,14 @@ type BookmarkView struct {
 //	POST   /api/bookmarks        {"name", "path", "offset"} adds one
 //	PATCH  /api/bookmarks/{id}   {"name"} renames one
 //	DELETE /api/bookmarks/{id}   removes one
+//
+// The last three change something, so they need a login (see internal/auth).
 func (h *Handlers) registerBookmarks(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/bookmarks", h.bookmarks)
 	mux.HandleFunc("GET /api/bookmarks/{id}", h.bookmark)
-	mux.HandleFunc("POST /api/bookmarks", h.addBookmark)
-	mux.HandleFunc("PATCH /api/bookmarks/{id}", h.renameBookmark)
-	mux.HandleFunc("DELETE /api/bookmarks/{id}", h.deleteBookmark)
+	mux.HandleFunc("POST /api/bookmarks", h.Auth.Require(h.addBookmark))
+	mux.HandleFunc("PATCH /api/bookmarks/{id}", h.Auth.Require(h.renameBookmark))
+	mux.HandleFunc("DELETE /api/bookmarks/{id}", h.Auth.Require(h.deleteBookmark))
 }
 
 // The hour being recorded is a .tmp file that is renamed when the hour ends, so bookmarks

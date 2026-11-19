@@ -18,10 +18,15 @@
 //	HUB_RECORDINGS_LOCALTIME  true if rtl_airband runs with localtime = true, so file names
 //	                     are in the TZ time zone rather than UTC (default false)
 //	HUB_DATA_DIR         a writable directory for the waveform cache and the hub's database
-//	                     (hub.db, SQLite, holding bookmarks). Without it waveforms are kept in
-//	                     memory only, old recordings are not analysed ahead and there are no
-//	                     bookmarks.
+//	                     (hub.db, SQLite: bookmarks and the last 36 hours of transmissions).
+//	                     Without it waveforms are kept in memory only, old recordings are not
+//	                     analysed ahead, there are no bookmarks and the transmission history
+//	                     starts empty on every restart.
 //	HUB_BACKFILL_PAUSE   pause between analysing older recordings in the background (default 1s)
+//	HUB_ADMIN_PASSPHRASE the passphrase for changes (adding, renaming and deleting bookmarks).
+//	                     Viewing and listening need none. Without it nothing can be changed.
+//	HUB_TITLE            the title at the top of the UI (default: the stream's name, from
+//	                     rtl_airband's icecast output)
 //	HUB_LOG_LEVEL        debug, info, warn or error (default info)
 package main
 
@@ -39,6 +44,7 @@ import (
 	"time"
 
 	"github.com/ap-andersson/airband-hub/internal/airband"
+	"github.com/ap-andersson/airband-hub/internal/auth"
 	"github.com/ap-andersson/airband-hub/internal/hub"
 	"github.com/ap-andersson/airband-hub/internal/recordings"
 	"github.com/ap-andersson/airband-hub/internal/relay"
@@ -100,9 +106,36 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// the hub's own data: bookmarks and the transmission history
+	var db *store.Store
+	dataDir := os.Getenv("HUB_DATA_DIR")
+	if dataDir != "" {
+		if err := os.MkdirAll(dataDir, 0o755); err != nil {
+			return fmt.Errorf("HUB_DATA_DIR: %w", err)
+		}
+		db, err = store.Open(filepath.Join(dataDir, "hub.db"))
+		if err != nil {
+			return fmt.Errorf("HUB_DATA_DIR: %w", err)
+		}
+		defer db.Close()
+	} else {
+		log.Info("HUB_DATA_DIR not set; no bookmarks, and the transmission history is lost on restart")
+	}
+
+	admin, err := auth.New(os.Getenv("HUB_ADMIN_PASSPHRASE"), dataDir)
+	if err != nil {
+		return fmt.Errorf("HUB_DATA_DIR: %w", err)
+	}
+	if !admin.Enabled() {
+		log.Info("HUB_ADMIN_PASSPHRASE not set; nothing can be changed from the UI")
+	}
+
 	var tracker *airband.Tracker
 	if url := os.Getenv("HUB_METRICS_URL"); url != "" {
 		tracker = airband.NewTracker()
+		if db != nil {
+			keepHistory(ctx, db, tracker, log)
+		}
 		poller := &airband.Poller{URL: url, Interval: metricsInterval, Client: &http.Client{}, Tracker: tracker, Log: log}
 		go poller.Run(ctx)
 		log.Info("reading rtl_airband metrics", "url", url, "every", metricsInterval)
@@ -124,22 +157,8 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		dataDir := os.Getenv("HUB_DATA_DIR")
 		analyzer := &recordings.Analyzer{Library: lib, DataDir: dataDir, Log: log}
-		recs = &recordings.Handlers{Library: lib, Analyzer: analyzer, Log: log}
-		if dataDir != "" {
-			if err := os.MkdirAll(dataDir, 0o755); err != nil {
-				return fmt.Errorf("HUB_DATA_DIR: %w", err)
-			}
-			db, err := store.Open(filepath.Join(dataDir, "hub.db"))
-			if err != nil {
-				return fmt.Errorf("HUB_DATA_DIR: %w", err)
-			}
-			defer db.Close()
-			recs.Store = db
-		} else {
-			log.Info("HUB_DATA_DIR not set; bookmarks are off")
-		}
+		recs = &recordings.Handlers{Library: lib, Analyzer: analyzer, Store: db, Auth: admin, Log: log}
 		go analyzer.Backfill(ctx, pause)
 		log.Info("serving recordings", "dir", dir, "names_in", loc.String(), "cache", analyzer.DataDir)
 	}
@@ -155,6 +174,8 @@ func run() error {
 			LiveInterval:   time.Second,
 			UI:             web.Handler(),
 			Recordings:     recs,
+			Title:          os.Getenv("HUB_TITLE"),
+			Auth:           admin,
 		}, reg, log),
 		// no write timeout: listener streams never end
 		ReadHeaderTimeout: 10 * time.Second,
@@ -178,4 +199,44 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// historyKeep is how long transmissions are kept in the database.
+const historyKeep = 36 * time.Hour
+
+// keepHistory loads the stored transmissions into the tracker, stores new ones as they are
+// recorded, and deletes old ones every hour.
+func keepHistory(ctx context.Context, db *store.Store, tracker *airband.Tracker, log *slog.Logger) {
+	txs, err := db.Transmissions(ctx, time.Now().Add(-historyKeep))
+	if err != nil {
+		log.Error("cannot load the transmission history", "err", err)
+	} else {
+		tracker.Restore(txs)
+		log.Info("loaded the transmission history", "transmissions", len(txs))
+	}
+	tracker.OnRecord = func(added []airband.Transmission) {
+		if err := db.AddTransmissions(context.Background(), added); err != nil {
+			log.Error("cannot store transmissions", "err", err)
+		}
+	}
+	prune := func() {
+		if n, err := db.PruneTransmissions(ctx, time.Now().Add(-historyKeep)); err != nil {
+			log.Error("cannot delete old transmissions", "err", err)
+		} else if n > 0 {
+			log.Debug("deleted old transmissions", "transmissions", n)
+		}
+	}
+	prune()
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				prune()
+			}
+		}
+	}()
 }

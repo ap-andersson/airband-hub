@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ap-andersson/airband-hub/internal/airband"
+	"github.com/ap-andersson/airband-hub/internal/auth"
 	"github.com/ap-andersson/airband-hub/internal/icecast"
 	"github.com/ap-andersson/airband-hub/internal/recordings"
 	"github.com/ap-andersson/airband-hub/internal/relay"
@@ -26,15 +27,23 @@ type Config struct {
 	UI http.Handler
 	// Recordings serves /api/recordings/...; nil when no recordings directory is configured.
 	Recordings *recordings.Handlers
+	// Title replaces the stream's name as the UI's title; empty keeps the stream's name.
+	Title string
+	// Auth guards changes and serves /api/login and /api/logout.
+	Auth *auth.Auth
 }
 
 // Live is what the dashboard shows.
 type Live struct {
 	Time              time.Time      `json:"time"`
+	Title             string         `json:"title,omitempty"`
 	Mounts            []relay.Status `json:"mounts"`
 	MetricsEnabled    bool           `json:"metrics_enabled"`
 	RecordingsEnabled bool           `json:"recordings_enabled"`
 	BookmarksEnabled  bool           `json:"bookmarks_enabled"`
+	// EditsEnabled: a passphrase is set, so changes are possible; LoggedIn: this viewer may make them
+	EditsEnabled bool `json:"edits_enabled"`
+	LoggedIn     bool `json:"logged_in"`
 	airband.State
 }
 
@@ -61,9 +70,11 @@ func NewHandler(cfg Config, reg *relay.Registry, log *slog.Logger) http.Handler 
 		Fallback:      cfg.UI,
 	}).Register(mux)
 
-	live := func() Live {
-		l := Live{Time: time.Now(), Mounts: reg.List(), MetricsEnabled: cfg.Tracker != nil, RecordingsEnabled: cfg.Recordings != nil,
-			BookmarksEnabled: cfg.Recordings != nil && cfg.Recordings.Store != nil}
+	cfg.Auth.Register(mux)
+	live := func(r *http.Request) Live {
+		l := Live{Time: time.Now(), Title: cfg.Title, Mounts: reg.List(), MetricsEnabled: cfg.Tracker != nil, RecordingsEnabled: cfg.Recordings != nil,
+			BookmarksEnabled: cfg.Recordings != nil && cfg.Recordings.Store != nil,
+			EditsEnabled:     cfg.Auth.Enabled(), LoggedIn: cfg.Auth.LoggedIn(r)}
 		if cfg.Tracker != nil {
 			l.State = cfg.Tracker.State()
 		} else {
@@ -83,7 +94,7 @@ func NewHandler(cfg Config, reg *relay.Registry, log *slog.Logger) http.Handler 
 		writeJSON(w, reg.List())
 	})
 	mux.HandleFunc("GET /api/live", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, live())
+		writeJSON(w, live(r))
 	})
 	mux.HandleFunc("GET /api/live/stream", func(w http.ResponseWriter, r *http.Request) {
 		rc := http.NewResponseController(w)
@@ -93,7 +104,7 @@ func NewHandler(cfg Config, reg *relay.Registry, log *slog.Logger) http.Handler 
 		ticker := time.NewTicker(cfg.LiveInterval)
 		defer ticker.Stop()
 		for {
-			b, err := json.Marshal(live())
+			b, err := json.Marshal(live(r))
 			if err != nil {
 				return
 			}
