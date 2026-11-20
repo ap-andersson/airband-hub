@@ -47,6 +47,10 @@ embedded web UI, and needs no changes to rtl_airband: it speaks the protocols rt
   - A 5-minute detail view.
   - Jump to the previous or next transmission, or **skip silence** to hear only the transmissions back to back.
   - Download any hour.
+- **Activity history.** Every transmission is kept for 90 days. An Activity page shows the
+  average day per frequency (transmissions or airtime per hour), daily totals with a day × hour
+  heatmap, and each day's full list, where any transmission plays straight from the recordings.
+  Hours when the receiver was down are left out of the averages instead of counting as quiet.
 - **Bookmarks.** While listening, name the moment and save it. Bookmarks have their own list on the
   recordings page, show as flags on the waveforms, and each has a link you can share. They are
   kept in a small SQLite file in `HUB_DATA_DIR`; there is no database server.
@@ -204,7 +208,7 @@ The hub is configured with environment variables. In the stack, put them in `DEP
 | `HUB_RECORDINGS_LOCALTIME` | `false` | `true` if rtl_airband runs with `localtime = true`, so file names are in `TZ` instead of UTC |
 | `HUB_TITLE` | (unset) | The title at the top of the UI. Without it, the stream's name from rtl_airband's `icecast` output is used. |
 | `HUB_ADMIN_PASSPHRASE` | (unset) | The passphrase for changes. The UI asks for it the first time you change something, and remembers the login for 90 days (also across restarts). Without it nothing can be changed. Changing it logs everyone out. |
-| `HUB_DATA_DIR` | (unset) | Writable folder for the waveform cache (about 6 KB per recorded hour) and `hub.db`, the SQLite file that holds bookmarks and the last 36 hours of transmissions. Without it, waveforms are only kept in memory, older recordings are not analysed ahead of time, there are no bookmarks, and the transmission history starts empty on every restart. The stack sets it. |
+| `HUB_DATA_DIR` | (unset) | Writable folder for the waveform cache (about 6 KB per recorded hour) and `hub.db`, the SQLite file that holds bookmarks and 90 days of transmissions and receiver uptime (a few MB). Without it, waveforms are only kept in memory, older recordings are not analysed ahead of time, there are no bookmarks, the transmission history starts empty on every restart, and there is no Activity page. The stack sets it. |
 | `HUB_BACKFILL_PAUSE` | `1s` | Pause between analysing older recordings in the background |
 | `HUB_BURST_BYTES` | `0` | Recent audio sent to a new listener at once. Playback starts sooner, but the player then stays that far behind live: 24576 is ~4 s at 48 kbit/s. |
 | `HUB_SOURCE_TIMEOUT` | `30s` | Drop a source that sends nothing for this long. rtl_airband is silent for ~10 s after connecting while the dongle starts. |
@@ -242,6 +246,8 @@ cached between builds.
 | `GET /api/mounts` | Mounts with their title, listeners and source state |
 | `GET /api/recordings/...` | Days, recordings, waveforms, audio from an exact time, downloads ([handlers](internal/recordings/handlers.go)) |
 | `GET`/`POST /api/bookmarks`, `GET`/`PATCH`/`DELETE /api/bookmarks/{id}` | Bookmarks: list, add `{"name", "path", "offset"}`, get, rename `{"name"}`, delete ([handlers](internal/recordings/bookmarks.go)). Adding, renaming and deleting need a login. |
+| `GET /api/activity?days=30&tz=...`, `GET /api/activity/transmissions?date=...&tz=...` | The transmission history per frequency, day and hour (with receiver uptime), and one day's transmissions ([activity](internal/activity/activity.go)) |
+| `GET /api/recordings/at?time=...` | The recording covering a moment, and the offset into it |
 | `POST /api/login`, `POST /api/logout` | Log in with `{"passphrase"}`, which sets a session cookie, or log out ([auth](internal/auth/auth.go)) |
 | `SOURCE`/`PUT /<mount>`, `GET /admin/metadata` | The Icecast source side, for rtl_airband |
 | `GET /healthz` | Liveness |

@@ -31,7 +31,7 @@ function useJSON<T>(url: string | null, refresh = 0): { data: T | null; error: s
 // Finished recordings never change, so their waveforms are kept for the whole visit.
 const waveCache = new Map<string, Promise<Decoded>>();
 
-function loadWave(rec: Recording): Promise<Decoded> {
+export function loadWave(rec: Recording): Promise<Decoded> {
   const url = `/api/recordings/waveform?path=${encodeURIComponent(rec.path)}`;
   const fetchIt = () =>
     fetch(url)

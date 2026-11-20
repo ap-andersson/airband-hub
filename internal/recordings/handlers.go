@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ type Handlers struct {
 //	GET /api/recordings/waveform?path=...           peaks and transmission markers
 //	GET /api/recordings/audio?path=...&from=12.5    the audio from that time, cut at an exact frame
 //	GET /api/recordings/download?path=...           the whole file
+//	GET /api/recordings/at?time=2026-11-20T10:15:00Z the recording covering a moment, and where in it
 //
 // and, with a Store, the bookmark endpoints (see registerBookmarks).
 func (h *Handlers) Register(mux *http.ServeMux) {
@@ -44,6 +46,7 @@ func (h *Handlers) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/recordings/waveform", h.waveform)
 	mux.HandleFunc("GET /api/recordings/audio", h.audio)
 	mux.HandleFunc("GET /api/recordings/download", h.download)
+	mux.HandleFunc("GET /api/recordings/at", h.at)
 	if h.Store != nil {
 		h.registerBookmarks(mux)
 	}
@@ -224,4 +227,35 @@ func writeJSONStatus(w http.ResponseWriter, r *http.Request, status int, v any) 
 	}
 	w.WriteHeader(status)
 	json.NewEncoder(out).Encode(v)
+}
+
+// maxRecordingSpan bounds how long after its start a recording can cover a moment, when no later
+// recording starts in between (hourly files are one hour; the current one is still growing).
+const maxRecordingSpan = 2 * time.Hour
+
+func (h *Handlers) at(w http.ResponseWriter, r *http.Request) {
+	t, err := time.Parse(time.RFC3339Nano, r.URL.Query().Get("time"))
+	if err != nil {
+		http.Error(w, "time must be RFC 3339", http.StatusBadRequest)
+		return
+	}
+	list, err := h.Library.List()
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	// the last recording that starts at or before t; list is oldest first
+	i := sort.Search(len(list), func(i int) bool { return list[i].Start.After(t) }) - 1
+	if i < 0 || t.Sub(list[i].Start) > maxRecordingSpan {
+		http.Error(w, "no recording covers that moment", http.StatusNotFound)
+		return
+	}
+	rec := list[i]
+	if fresh, err := h.Library.refresh(rec); err == nil {
+		rec = fresh
+	}
+	writeJSON(w, r, struct {
+		Recording Recording `json:"recording"`
+		Offset    float64   `json:"offset"` // seconds into the recording
+	}{rec, t.Sub(rec.Start).Seconds()})
 }

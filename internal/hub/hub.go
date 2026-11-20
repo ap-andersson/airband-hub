@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ap-andersson/airband-hub/internal/activity"
 	"github.com/ap-andersson/airband-hub/internal/airband"
 	"github.com/ap-andersson/airband-hub/internal/auth"
 	"github.com/ap-andersson/airband-hub/internal/icecast"
@@ -31,6 +32,8 @@ type Config struct {
 	Title string
 	// Auth guards changes and serves /api/login and /api/logout.
 	Auth *auth.Auth
+	// Activity serves the stored history; nil without a database or metrics.
+	Activity *activity.Handlers
 }
 
 // Live is what the dashboard shows.
@@ -42,8 +45,9 @@ type Live struct {
 	RecordingsEnabled bool           `json:"recordings_enabled"`
 	BookmarksEnabled  bool           `json:"bookmarks_enabled"`
 	// EditsEnabled: a passphrase is set, so changes are possible; LoggedIn: this viewer may make them
-	EditsEnabled bool `json:"edits_enabled"`
-	LoggedIn     bool `json:"logged_in"`
+	EditsEnabled    bool `json:"edits_enabled"`
+	ActivityEnabled bool `json:"activity_enabled"`
+	LoggedIn        bool `json:"logged_in"`
 	airband.State
 }
 
@@ -55,6 +59,7 @@ type Live struct {
 //	GET  /api/live/stream    the same, pushed every LiveInterval as server-sent events
 //	GET  /api/recordings/... recorded files, waveforms and audio (see recordings.Handlers)
 //	     /api/bookmarks/...  named moments in the recordings (with a data directory)
+//	GET  /api/activity/...   the transmission history (with a data directory and metrics)
 //	GET  /admin/metadata     Icecast metadata updates (for rtl_airband)
 //	SOURCE|PUT /<mount>      Icecast source push (for rtl_airband)
 //	GET|HEAD /<mount>        live stream for players
@@ -74,7 +79,8 @@ func NewHandler(cfg Config, reg *relay.Registry, log *slog.Logger) http.Handler 
 	live := func(r *http.Request) Live {
 		l := Live{Time: time.Now(), Title: cfg.Title, Mounts: reg.List(), MetricsEnabled: cfg.Tracker != nil, RecordingsEnabled: cfg.Recordings != nil,
 			BookmarksEnabled: cfg.Recordings != nil && cfg.Recordings.Store != nil,
-			EditsEnabled:     cfg.Auth.Enabled(), LoggedIn: cfg.Auth.LoggedIn(r)}
+			EditsEnabled:     cfg.Auth.Enabled(), LoggedIn: cfg.Auth.LoggedIn(r),
+			ActivityEnabled: cfg.Activity != nil}
 		if cfg.Tracker != nil {
 			l.State = cfg.Tracker.State()
 		} else {
@@ -85,6 +91,9 @@ func NewHandler(cfg Config, reg *relay.Registry, log *slog.Logger) http.Handler 
 
 	if cfg.Recordings != nil {
 		cfg.Recordings.Register(mux)
+	}
+	if cfg.Activity != nil {
+		cfg.Activity.Register(mux)
 	}
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

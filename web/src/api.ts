@@ -61,6 +61,7 @@ export interface Live {
   recordings_enabled: boolean;
   bookmarks_enabled: boolean;
   edits_enabled: boolean; // an admin passphrase is set
+  activity_enabled: boolean;
   logged_in: boolean;
   receiver: Receiver;
   frequencies: Frequency[];

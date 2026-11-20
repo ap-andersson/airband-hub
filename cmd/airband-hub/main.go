@@ -18,7 +18,7 @@
 //	HUB_RECORDINGS_LOCALTIME  true if rtl_airband runs with localtime = true, so file names
 //	                     are in the TZ time zone rather than UTC (default false)
 //	HUB_DATA_DIR         a writable directory for the waveform cache and the hub's database
-//	                     (hub.db, SQLite: bookmarks and the last 36 hours of transmissions).
+//	                     (hub.db, SQLite: bookmarks, and 90 days of transmissions and uptime).
 //	                     Without it waveforms are kept in memory only, old recordings are not
 //	                     analysed ahead, there are no bookmarks and the transmission history
 //	                     starts empty on every restart.
@@ -43,6 +43,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ap-andersson/airband-hub/internal/activity"
 	"github.com/ap-andersson/airband-hub/internal/airband"
 	"github.com/ap-andersson/airband-hub/internal/auth"
 	"github.com/ap-andersson/airband-hub/internal/hub"
@@ -163,6 +164,11 @@ func run() error {
 		log.Info("serving recordings", "dir", dir, "names_in", loc.String(), "cache", analyzer.DataDir)
 	}
 
+	var activityHandlers *activity.Handlers
+	if db != nil && tracker != nil {
+		activityHandlers = &activity.Handlers{Store: db, Log: log}
+	}
+
 	reg := relay.NewRegistry(relay.Options{BurstBytes: burst, Grace: grace})
 	srv := &http.Server{
 		Addr: env("HUB_LISTEN", ":8000"),
@@ -175,6 +181,7 @@ func run() error {
 			UI:             web.Handler(),
 			Recordings:     recs,
 			Title:          os.Getenv("HUB_TITLE"),
+			Activity:       activityHandlers,
 			Auth:           admin,
 		}, reg, log),
 		// no write timeout: listener streams never end
@@ -201,13 +208,17 @@ func run() error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-// historyKeep is how long transmissions are kept in the database.
-const historyKeep = 36 * time.Hour
+// historyKeep is how long transmissions and uptime are kept in the database; the Activity page
+// shows up to this far back.
+const historyKeep = activity.MaxDays * 24 * time.Hour
 
-// keepHistory loads the stored transmissions into the tracker, stores new ones as they are
-// recorded, and deletes old ones every hour.
+// dashboardKeep is how much history the dashboard's tracker loads on start.
+const dashboardKeep = 36 * time.Hour
+
+// keepHistory loads recent transmissions into the tracker, stores new ones as they are
+// recorded, records when the receiver was working, and deletes old rows every hour.
 func keepHistory(ctx context.Context, db *store.Store, tracker *airband.Tracker, log *slog.Logger) {
-	txs, err := db.Transmissions(ctx, time.Now().Add(-historyKeep))
+	txs, err := db.Transmissions(ctx, time.Now().Add(-dashboardKeep))
 	if err != nil {
 		log.Error("cannot load the transmission history", "err", err)
 	} else {
@@ -220,10 +231,14 @@ func keepHistory(ctx context.Context, db *store.Store, tracker *airband.Tracker,
 		}
 	}
 	prune := func() {
-		if n, err := db.PruneTransmissions(ctx, time.Now().Add(-historyKeep)); err != nil {
+		before := time.Now().Add(-historyKeep)
+		if n, err := db.PruneTransmissions(ctx, before); err != nil {
 			log.Error("cannot delete old transmissions", "err", err)
 		} else if n > 0 {
 			log.Debug("deleted old transmissions", "transmissions", n)
+		}
+		if err := db.PruneUptime(ctx, before); err != nil {
+			log.Error("cannot delete old uptime", "err", err)
 		}
 	}
 	prune()
@@ -239,4 +254,38 @@ func keepHistory(ctx context.Context, db *store.Store, tracker *airband.Tracker,
 			}
 		}
 	}()
+	go recordUptime(ctx, db, tracker, log)
+}
+
+// recordUptime notes, every 10 s, whether the hub has working metrics from rtl_airband, and
+// writes the seconds per hour once a minute, so the Activity page can leave out hours when the
+// receiver was down instead of counting them as quiet.
+func recordUptime(ctx context.Context, db *store.Store, tracker *airband.Tracker, log *slog.Logger) {
+	const step = 10 * time.Second
+	pending := map[time.Time]float64{}
+	flush := func() {
+		for hour, sec := range pending {
+			if err := db.AddUptime(context.Background(), hour, sec); err != nil {
+				log.Error("cannot store uptime", "err", err)
+				return
+			}
+			delete(pending, hour)
+		}
+	}
+	tick := time.NewTicker(step)
+	defer tick.Stop()
+	for n := 1; ; n++ {
+		select {
+		case <-ctx.Done():
+			flush()
+			return
+		case now := <-tick.C:
+			if r := tracker.State().Receiver; r.OK && now.Sub(r.UpdatedAt) < 5*time.Second {
+				pending[now.UTC().Truncate(time.Hour)] += step.Seconds()
+			}
+			if n%6 == 0 {
+				flush()
+			}
+		}
+	}
 }

@@ -224,3 +224,20 @@ func TestBackfillCachesFinishedFiles(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestRecordingAtAMoment(t *testing.T) {
+	srv, _, _ := setup(t)
+	var got struct {
+		Recording Recording
+		Offset    float64
+	}
+	get(t, srv.URL+"/api/recordings/at?time=2026-11-18T16:20:30Z", &got)
+	if got.Recording.Path != "2026/11/18/essl_20261118_16.mp3" || got.Offset != 1230 {
+		t.Fatalf("got %+v", got)
+	}
+	for _, q := range []string{"2026-11-01T00:00:00Z", "2026-11-18T22:00:00Z", "yesterday"} {
+		if resp := get(t, srv.URL+"/api/recordings/at?time="+q, nil); resp.StatusCode == 200 {
+			t.Errorf("%s found a recording", q)
+		}
+	}
+}

@@ -37,6 +37,13 @@ var migrations = []string{
 		approximate INTEGER NOT NULL  -- 1 when several ended within one scrape
 	);
 	CREATE INDEX transmissions_end ON transmissions (end_ms);`,
+
+	// seconds per hour in which the hub had working metrics from rtl_airband, so averages
+	// can leave out hours when the receiver was down
+	`CREATE TABLE uptime (
+		hour_ms INTEGER PRIMARY KEY, -- start of the hour, Unix milliseconds
+		seconds REAL    NOT NULL
+	);`,
 }
 
 type Store struct {
@@ -221,4 +228,103 @@ func (s *Store) PruneTransmissions(ctx context.Context, before time.Time) (int64
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// TransmissionsBetween returns those that started in [from, to), oldest first.
+func (s *Store) TransmissionsBetween(ctx context.Context, from, to time.Time) ([]airband.Transmission, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT start_ms, end_ms, freq, label, duration_s, snr_min_db, snr_max_db, approximate FROM transmissions WHERE start_ms >= ? AND start_ms < ? ORDER BY start_ms, rowid",
+		from.UnixMilli(), to.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []airband.Transmission{}
+	for rows.Next() {
+		var t airband.Transmission
+		var start, end int64
+		if err := rows.Scan(&start, &end, &t.Freq, &t.Label, &t.DurationSeconds, &t.SNRMinDB, &t.SNRMaxDB, &t.Approximate); err != nil {
+			return nil, err
+		}
+		t.Start, t.End = time.UnixMilli(start).UTC(), time.UnixMilli(end).UTC()
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// AddUptime adds seconds of working reception to the hour starting at hour.
+func (s *Store) AddUptime(ctx context.Context, hour time.Time, seconds float64) error {
+	_, err := s.db.ExecContext(ctx,
+		"INSERT INTO uptime (hour_ms, seconds) VALUES (?, MIN(3600, ?)) ON CONFLICT (hour_ms) DO UPDATE SET seconds = MIN(3600, seconds + excluded.seconds)",
+		hour.UnixMilli(), seconds)
+	return err
+}
+
+// Uptime returns the seconds of working reception per hour, for hours starting in [from, to).
+func (s *Store) Uptime(ctx context.Context, from, to time.Time) (map[time.Time]float64, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT hour_ms, seconds FROM uptime WHERE hour_ms >= ? AND hour_ms < ?", from.UnixMilli(), to.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[time.Time]float64{}
+	for rows.Next() {
+		var ms int64
+		var sec float64
+		if err := rows.Scan(&ms, &sec); err != nil {
+			return nil, err
+		}
+		out[time.UnixMilli(ms).UTC()] = sec
+	}
+	return out, rows.Err()
+}
+
+// PruneUptime deletes the hours before before.
+func (s *Store) PruneUptime(ctx context.Context, before time.Time) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM uptime WHERE hour_ms < ?", before.UnixMilli())
+	return err
+}
+
+// Frequency is a frequency seen in the stored transmissions, with its latest label.
+type Frequency struct {
+	Freq  string `json:"freq"`
+	Label string `json:"label"`
+}
+
+// Frequencies returns every frequency in the stored transmissions, ordered by frequency.
+func (s *Store) Frequencies(ctx context.Context) ([]Frequency, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT freq, label FROM transmissions t WHERE rowid = (SELECT rowid FROM transmissions WHERE freq = t.freq ORDER BY end_ms DESC LIMIT 1) ORDER BY CAST(freq AS REAL)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Frequency{}
+	for rows.Next() {
+		var f Frequency
+		if err := rows.Scan(&f.Freq, &f.Label); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// HistoryStart returns when the stored transmissions and the uptime record begin; zero times
+// when there are none.
+func (s *Store) HistoryStart(ctx context.Context) (transmissions, uptime time.Time, err error) {
+	var tx, up sql.NullInt64
+	if err = s.db.QueryRowContext(ctx, "SELECT MIN(start_ms) FROM transmissions").Scan(&tx); err != nil {
+		return
+	}
+	if err = s.db.QueryRowContext(ctx, "SELECT MIN(hour_ms) FROM uptime").Scan(&up); err != nil {
+		return
+	}
+	if tx.Valid {
+		transmissions = time.UnixMilli(tx.Int64).UTC()
+	}
+	if up.Valid {
+		uptime = time.UnixMilli(up.Int64).UTC()
+	}
+	return
 }

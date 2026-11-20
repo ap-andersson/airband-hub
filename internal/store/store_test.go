@@ -150,3 +150,56 @@ func TestTransmissionsRoundTripAndPrune(t *testing.T) {
 		t.Fatalf("left %+v", all)
 	}
 }
+
+func TestUptimeAddsUpPerHourAndCaps(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	h := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	for _, sec := range []float64{60, 60, 30} {
+		if err := s.AddUptime(ctx, h, sec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.AddUptime(ctx, h.Add(time.Hour), 5000) // more than an hour is capped
+	up, err := s.Uptime(ctx, h, h.Add(2*time.Hour))
+	if err != nil || up[h] != 150 || up[h.Add(time.Hour)] != 3600 {
+		t.Fatalf("uptime %v %v", up, err)
+	}
+	if err := s.PruneUptime(ctx, h.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if up, _ := s.Uptime(ctx, h, h.Add(2*time.Hour)); len(up) != 1 {
+		t.Fatalf("after prune %v", up)
+	}
+}
+
+func TestTransmissionsBetween(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	var txs []airband.Transmission
+	for i := range 5 {
+		start := t0.Add(time.Duration(i) * time.Hour)
+		txs = append(txs, airband.Transmission{Start: start, End: start.Add(2 * time.Second), Freq: "118.805", DurationSeconds: 2})
+	}
+	s.AddTransmissions(ctx, txs)
+	got, err := s.TransmissionsBetween(ctx, t0.Add(time.Hour), t0.Add(3*time.Hour))
+	if err != nil || len(got) != 2 || !got[0].Start.Equal(t0.Add(time.Hour)) {
+		t.Fatalf("got %+v %v", got, err)
+	}
+}
+
+func TestHistoryStart(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	if tx, up, err := s.HistoryStart(ctx); err != nil || !tx.IsZero() || !up.IsZero() {
+		t.Fatalf("empty: %v %v %v", tx, up, err)
+	}
+	t0 := time.Date(2026, 11, 19, 8, 0, 0, 0, time.UTC)
+	s.AddTransmissions(ctx, []airband.Transmission{{Start: t0.Add(time.Hour), End: t0.Add(time.Hour), Freq: "1"}, {Start: t0, End: t0, Freq: "1"}})
+	s.AddUptime(ctx, t0.Add(30*time.Hour), 10)
+	tx, up, err := s.HistoryStart(ctx)
+	if err != nil || !tx.Equal(t0) || !up.Equal(t0.Add(30*time.Hour)) {
+		t.Fatalf("got %v %v %v", tx, up, err)
+	}
+}

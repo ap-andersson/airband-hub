@@ -5,6 +5,7 @@ import { ago, clock, seconds, snr, stationName } from "./format";
 import { LoginDialog, logout, useLoggedIn } from "./login";
 import { setTheme, useTheme, type ThemeChoice } from "./theme";
 import { PlayerBar, PlayerProvider, usePlayer } from "./player";
+import { Activity } from "./Activity";
 import { Recordings } from "./Recordings";
 import { Link, useLocation } from "./router";
 import { useLive, type Connection } from "./useLive";
@@ -22,26 +23,36 @@ function Shell() {
   const url = useLocation();
   const now = live ? new Date(live.time) : new Date();
   const mount = live?.mounts[0];
-  const page = url.pathname.startsWith("/recordings") ? "recordings" : "live";
+  const page = url.pathname.startsWith("/recordings") ? "recordings" : url.pathname.startsWith("/activity") ? "activity" : "live";
 
   const title = live?.title || mount?.info.name || "Airband hub";
   useEffect(() => {
-    document.title = page === "recordings" ? `Recordings, ${title}` : title;
+    document.title = page === "recordings" ? `Recordings, ${title}` : page === "activity" ? `Activity, ${title}` : title;
   }, [page, title]);
 
   return (
     <div class="page">
-      <Header title={title} mount={mount} connection={connection} page={page} recordingsEnabled={!!live?.recordings_enabled} loggedIn={!!live?.logged_in} />
+      <Header
+        title={title}
+        mount={mount}
+        connection={connection}
+        page={page}
+        recordingsEnabled={!!live?.recordings_enabled}
+        activityEnabled={!!live?.activity_enabled}
+        loggedIn={!!live?.logged_in}
+      />
       <LoginDialog />
       {live === null ? (
         <p class="empty">{connection === "lost" ? "Cannot reach the hub. Retrying…" : "Connecting to the hub…"}</p>
+      ) : page === "activity" ? (
+        <Activity enabled={live.activity_enabled} />
       ) : page === "recordings" ? (
         <Recordings enabled={live.recordings_enabled} bookmarksEnabled={live.bookmarks_enabled} url={url} />
       ) : (
         <main>
           <Board live={live} />
           <div class="lower">
-            <Recent recent={live.recent} metricsEnabled={live.metrics_enabled} now={now} />
+            <Recent recent={live.recent} metricsEnabled={live.metrics_enabled} activityEnabled={live.activity_enabled} now={now} />
             <ReceiverPanel receiver={live.receiver} metricsEnabled={live.metrics_enabled} />
           </div>
         </main>
@@ -61,6 +72,7 @@ function Header({
   connection,
   page,
   recordingsEnabled,
+  activityEnabled,
   loggedIn: hubSaysLoggedIn,
 }: {
   title: string;
@@ -68,6 +80,7 @@ function Header({
   connection: Connection;
   page: string;
   recordingsEnabled: boolean;
+  activityEnabled: boolean;
   loggedIn: boolean;
 }) {
   const loggedIn = useLoggedIn(hubSaysLoggedIn);
@@ -95,6 +108,11 @@ function Header({
           {recordingsEnabled && (
             <Link href="/recordings" current={page === "recordings"}>
               Recordings
+            </Link>
+          )}
+          {activityEnabled && (
+            <Link href="/activity" current={page === "activity"}>
+              Activity
             </Link>
           )}
         </nav>
@@ -305,7 +323,7 @@ function TxRow({ t, now, sub, open, onToggle }: { t: Transmission; now: Date; su
   );
 }
 
-function Recent({ recent, metricsEnabled, now }: { recent: Transmission[]; metricsEnabled: boolean; now: Date }) {
+function Recent({ recent, metricsEnabled, activityEnabled, now }: { recent: Transmission[]; metricsEnabled: boolean; activityEnabled: boolean; now: Date }) {
   // keyed by the group's first transmission, which stays put while newer ones join it
   const [open, setOpen] = useState<Set<string>>(new Set());
   const toggle = (key: string) =>
@@ -371,6 +389,11 @@ function Recent({ recent, metricsEnabled, now }: { recent: Transmission[]; metri
             })}
           </tbody>
         </table>
+      )}
+      {activityEnabled && (
+        <Link href="/activity" class="panel-more">
+          Every transmission, per day and hour
+        </Link>
       )}
     </Panel>
   );

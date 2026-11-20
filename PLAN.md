@@ -74,17 +74,17 @@ Prometheus ── scrapes airband /metrics directly
 ## Status
 
 **Done**
-- **`/metrics` in rtl_airband** ([RTLSDR-Airband fork](https://github.com/ap-andersson/RTLSDR-Airband), branch `dev/metrics_endpoint`):
+- **`/metrics` in rtl_airband** ([RTLSDR-Airband fork](https://github.com/ap-andersson/RTLSDR-Airband), on its main):
   - `metrics_listen = "host:port";` serves the same Prometheus text as the stats file, at `GET /metrics`.
   - It is a hand-rolled HTTP server on its own thread.
   - The response is rendered by the output thread through a request/publish handoff, so the HTTP thread never reads radio data.
   - It adds the `channel_squelch_open` gauge and writes non-finite values as `NaN`/`+Inf`/`-Inf`.
   - Unit and system tests; the system tests parse the output with `prometheus_client`.
-- **Lean rtl_airband image** (branch `dev/docker_build_options`):
+- **Lean rtl_airband image** (the fork's main, published by its own workflow):
   - the fork's Alpine Dockerfile with an `NFM` build argument and a BuildKit cache mount for the build tree
   - 32 MB, runs only `rtl_airband` under tini
   - a rebuild after a source change takes seconds
-- **The stack:** `deploy/compose.yml` runs rtl-airband and the hub, and `scripts/deploy.sh` builds both on the host.
+- **The stack:** `deploy/compose.yml` runs rtl-airband and the hub from the published images; `scripts/deploy.sh` pulls them, or builds both on the host with `--build`.
   - rtl-airband sits behind a compose profile, so its image can be built while another container still owns the SDR.
   - `compose.legacy.yml` lets the hub run next to an older container during a migration.
 - **Live stream:**
@@ -96,8 +96,9 @@ Prometheus ── scrapes airband /metrics directly
   - an Icecast-compatible `/status-json.xsl`, for players such as tar1090's
 - **Dashboard:**
   - a strip per frequency with a level meter (noise floor, signal, squelch level); the strip lights up while squelch is open
-  - recent transmissions, with exact length and SNR range, derived from the metrics histograms
+  - recent transmissions, with exact length and SNR range, derived from the metrics histograms; back-to-back ones on a frequency fold into one row
   - receiver health
+  - foldable boxes, a menu bar, a custom title (`HUB_TITLE`), an Auto/Dark/Light toggle, and a phone layout
 - **Recordings browser:**
   - a waveform per recorded hour, with transmission markers
   - click to play from an exact frame
@@ -112,25 +113,21 @@ Prometheus ── scrapes airband /metrics directly
   - rename and delete
   - ids are never reused, so an old link cannot open a different bookmark
   - bookmarks store the final file name, so one made in the hour being recorded still works after the `.tmp` is renamed
-
 - **One player for the whole UI:** live and recordings share the bar at the bottom, with a loading indicator and volume, and playback carries on between pages. Live audio is decoded in the page (see Findings) and runs about 0.5 s behind the receiver.
 
 **Next**
 - [x] **Access control:** viewing stays open; every change needs the passphrase in `HUB_ADMIN_PASSPHRASE`. Logging in sets an HttpOnly, SameSite=Strict cookie signed with a key kept in the data folder (so logins survive restarts) and mixed with the passphrase (so changing it logs everyone out). Wrong guesses are slowed down and limited to 10 per 10 minutes.
 - [x] Publish images: GitHub Actions builds both images for amd64 and arm64 on native runners and publishes them to ghcr. The fork's upstream workflows are kept but only run by hand. `deploy.sh` pulls the images, and `--build` still builds on the host.
 - [x] Store the transmission history in SQLite too (`hub.db`, D13): the last 36 hours, loaded back on start, so the dashboard's history survives restarts.
-- [ ] Show more of the stored history than the 50 most recent transmissions (per frequency, per hour).
+- [x] **Activity page:** 90 days of transmissions and receiver uptime per hour in `hub.db` (a few MB). Average day per frequency, daily totals with a day × hour heatmap, and each day's list, playable from the recordings. Averages only count hours the receiver was up; hours before the history began count as no data.
+- [ ] Activity, next: median SNR per frequency per day (antenna and gain changes), first and last transmission of the day, weekday vs weekend, receiver health per hour.
 - [ ] Offer the metrics endpoint upstream (now on the fork's main) as a pull request to RTLSDR-Airband.
 - [ ] Config editing (the end goal): edit `rtl_airband.conf`, starting with the scan list, in the hub. Back it up before writing, then restart (D12).
-- [ ] Check the dashboard at phone width and in light mode.
+- [x] Check the dashboard at phone width and in light mode.
 - [x] New screenshots for the README.
 
 **Ideas**
-- Set the title from the metrics when squelch opens, so it survives hub restarts and updates on every transmission
-- Continue playback into the next hour
 - Zoom the waveform by dragging
-- A whole-day "transmissions only" playlist
-- A cap on live listeners, so a busy link cannot starve the Pi
 - Build the rtl_airband image against the RTL-SDR Blog driver fork, and include `rtl_test`
 - The hub's own metrics (listeners, relay health)
 
