@@ -1879,14 +1879,48 @@ button.danger {
   font-size: 0.9rem;
 }
 
+/* the same chevron as the folding boxes: right when closed, turning down when opened */
 .table-view summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
   cursor: pointer;
   color: var(--ink-2);
+  list-style: none;
 }
 
+.table-view summary::-webkit-details-marker {
+  display: none;
+}
+
+.table-view summary::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 2px solid var(--ink-3);
+  border-bottom: 2px solid var(--ink-3);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.table-view[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.table-view summary:hover {
+  color: var(--ink);
+}
+
+/* indented by the chevron, so the first column lines up with the summary text and the chart */
 .table-view table {
-  margin-top: 0.5rem;
+  margin: 0.5rem 0 0 1.85rem;
   max-width: 36rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .table-view summary::before {
+    transition: none;
+  }
 }
 
 .day-list-head {
