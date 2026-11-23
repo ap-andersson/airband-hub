@@ -8,6 +8,7 @@ export function stationName(label: string, freq: string): string {
 
 export function seconds(s: number): string {
   if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)} s`;
+  if (s >= 3600) return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
   const m = Math.floor(s / 60);
   return `${m} min ${Math.round(s % 60)} s`;
 }

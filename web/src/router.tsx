@@ -3,9 +3,14 @@ import { useEffect, useState } from "preact/hooks";
 
 const EVENT = "hub-navigate";
 
+// replace: a change within the current view (e.g. stepping through days); the scroll position
+// stays. Otherwise it is a new page, which starts at the top, as a link would.
 export function navigate(to: string, replace = false) {
   if (replace) history.replaceState(null, "", to);
-  else history.pushState(null, "", to);
+  else {
+    history.pushState(null, "", to);
+    scrollTo(0, 0);
+  }
   dispatchEvent(new Event(EVENT));
 }
 

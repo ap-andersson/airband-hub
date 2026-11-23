@@ -6,6 +6,7 @@ import { LoginDialog, logout, useLoggedIn } from "./login";
 import { setTheme, useTheme, type ThemeChoice } from "./theme";
 import { PlayerBar, PlayerProvider, usePlayer } from "./player";
 import { Activity } from "./Activity";
+import { Stats } from "./Stats";
 import { Recordings } from "./Recordings";
 import { Link, useLocation } from "./router";
 import { useLive, type Connection } from "./useLive";
@@ -23,11 +24,18 @@ function Shell() {
   const url = useLocation();
   const now = live ? new Date(live.time) : new Date();
   const mount = live?.mounts[0];
-  const page = url.pathname.startsWith("/recordings") ? "recordings" : url.pathname.startsWith("/activity") ? "activity" : "live";
+  const page = url.pathname.startsWith("/recordings")
+    ? "recordings"
+    : url.pathname.startsWith("/activity")
+      ? "activity"
+      : url.pathname.startsWith("/stats")
+        ? "stats"
+        : "live";
 
   const title = live?.title || mount?.info.name || "Airband hub";
   useEffect(() => {
-    document.title = page === "recordings" ? `Recordings, ${title}` : page === "activity" ? `Activity, ${title}` : title;
+    const names: Record<string, string> = { recordings: "Recordings", activity: "Activity", stats: "Stats" };
+    document.title = names[page] ? `${names[page]}, ${title}` : title;
   }, [page, title]);
 
   return (
@@ -45,7 +53,9 @@ function Shell() {
       {live === null ? (
         <p class="empty">{connection === "lost" ? "Cannot reach the hub. Retrying…" : "Connecting to the hub…"}</p>
       ) : page === "activity" ? (
-        <Activity enabled={live.activity_enabled} />
+        <Activity enabled={live.activity_enabled} url={url} />
+      ) : page === "stats" ? (
+        <Stats enabled={live.activity_enabled} />
       ) : page === "recordings" ? (
         <Recordings enabled={live.recordings_enabled} bookmarksEnabled={live.bookmarks_enabled} url={url} />
       ) : (
@@ -113,6 +123,11 @@ function Header({
           {activityEnabled && (
             <Link href="/activity" current={page === "activity"}>
               Activity
+            </Link>
+          )}
+          {activityEnabled && (
+            <Link href="/stats" current={page === "stats"}>
+              Stats
             </Link>
           )}
         </nav>
@@ -392,7 +407,7 @@ function Recent({ recent, metricsEnabled, activityEnabled, now }: { recent: Tran
       )}
       {activityEnabled && (
         <Link href="/activity" class="panel-more">
-          Every transmission, per day and hour
+          Every transmission, day by day
         </Link>
       )}
     </Panel>

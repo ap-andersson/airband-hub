@@ -203,3 +203,19 @@ func TestHistoryStart(t *testing.T) {
 		t.Fatalf("got %v %v %v", tx, up, err)
 	}
 }
+
+func TestFrequenciesTakeTheLatestLabel(t *testing.T) {
+	s, _ := open(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	s.AddTransmissions(ctx, []airband.Transmission{
+		{Start: t0, End: t0.Add(time.Second), Freq: "129.800", Label: "OLD NAME"},
+		{Start: t0.Add(time.Hour), End: t0.Add(time.Hour + time.Second), Freq: "129.800", Label: "MALMEN TOWER"},
+		{Start: t0.Add(30 * time.Minute), End: t0.Add(30*time.Minute + time.Second), Freq: "129.800", Label: "MIDDLE NAME"},
+		{Start: t0, End: t0.Add(time.Second), Freq: "118.805", Label: "SAAB TOWER"},
+	})
+	got, err := s.Frequencies(ctx)
+	if err != nil || len(got) != 2 || got[0] != (Frequency{"118.805", "SAAB TOWER"}) || got[1] != (Frequency{"129.800", "MALMEN TOWER"}) {
+		t.Fatalf("got %+v %v", got, err)
+	}
+}

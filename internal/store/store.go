@@ -44,6 +44,9 @@ var migrations = []string{
 		hour_ms INTEGER PRIMARY KEY, -- start of the hour, Unix milliseconds
 		seconds REAL    NOT NULL
 	);`,
+
+	// the Activity page reads transmissions by start time
+	`CREATE INDEX transmissions_start ON transmissions (start_ms);`,
 }
 
 type Store struct {
@@ -294,7 +297,8 @@ type Frequency struct {
 // Frequencies returns every frequency in the stored transmissions, ordered by frequency.
 func (s *Store) Frequencies(ctx context.Context) ([]Frequency, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT freq, label FROM transmissions t WHERE rowid = (SELECT rowid FROM transmissions WHERE freq = t.freq ORDER BY end_ms DESC LIMIT 1) ORDER BY CAST(freq AS REAL)`)
+		// one pass: with MAX(), SQLite takes the bare label column from the row holding the maximum
+		`SELECT freq, label, MAX(end_ms) FROM transmissions GROUP BY freq ORDER BY CAST(freq AS REAL)`)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +306,8 @@ func (s *Store) Frequencies(ctx context.Context) ([]Frequency, error) {
 	out := []Frequency{}
 	for rows.Next() {
 		var f Frequency
-		if err := rows.Scan(&f.Freq, &f.Label); err != nil {
+		var latest int64
+		if err := rows.Scan(&f.Freq, &f.Label, &latest); err != nil {
 			return nil, err
 		}
 		out = append(out, f)

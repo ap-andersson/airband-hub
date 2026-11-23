@@ -810,6 +810,18 @@ td {
     border-radius: 1.25rem;
   }
 
+  /* four pages have to fit next to each other on a phone */
+  .nav {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.1rem;
+  }
+
+  .nav a {
+    font-size: 1.05rem;
+    padding: 0.3rem 0.7rem;
+  }
+
 }
 
 tr.group {
@@ -1573,6 +1585,20 @@ button.danger {
   gap: 0.75rem 1rem;
 }
 
+/* a chart box's title with its own controls beside it */
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.chart-head h3 {
+  margin: 0;
+}
+
 .activity-controls {
   display: flex;
   flex-wrap: wrap;
@@ -1624,6 +1650,64 @@ button.danger {
   margin: 0 0 0.5rem;
 }
 
+/* two ranked boxes side by side; stacked on narrow screens */
+.toplists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+}
+
+.toplist {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.toplist h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem;
+}
+
+.toplist ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.toplist li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 1rem;
+  align-items: baseline;
+}
+
+.toplist-name {
+  overflow-wrap: anywhere;
+}
+
+.toplist-value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.toplist-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--meter-track);
+  overflow: hidden;
+}
+
+.toplist-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+
 .chart-legend {
   list-style: none;
   margin: 0 0 0.5rem;
@@ -1633,6 +1717,36 @@ button.danger {
   gap: 0.25rem 1.25rem;
   font-size: 0.9rem;
   color: var(--ink-2);
+}
+
+/* the legend over the daily chart picks a frequency */
+.chart-legend.pickable button {
+  font: inherit;
+  color: inherit;
+  padding: 0.15rem 0.5rem;
+  margin-left: -0.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+}
+
+.chart-legend.pickable button:hover {
+  color: var(--ink);
+}
+
+.chart-legend.pickable button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--page);
+  box-shadow: inset 0 0 0 1px var(--strip-edge);
+}
+
+.chart-legend li.dimmed {
+  opacity: 0.45;
+}
+
+.show-all-freqs {
+  text-decoration: underline;
 }
 
 .swatch {
