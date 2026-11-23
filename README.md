@@ -47,10 +47,12 @@ embedded web UI, and needs no changes to rtl_airband: it speaks the protocols rt
   - A 5-minute detail view.
   - Jump to the previous or next transmission, or **skip silence** to hear only the transmissions back to back.
   - Download any hour.
-- **Activity history.** Every transmission is kept for 90 days. An Activity page shows the
-  average day per frequency (transmissions or airtime per hour), daily totals with a day × hour
-  heatmap, and each day's full list, where any transmission plays straight from the recordings.
-  Hours when the receiver was down are left out of the averages instead of counting as quiet.
+- **History and stats.** Every transmission is kept for 90 days.
+  - **Activity** lists each day's transmissions; any of them plays straight from the recordings.
+  - **Stats** sums up the last 30 days per frequency (transmissions per day, average length,
+    the average day), shows daily totals with a day × hour heatmap, and plots the median
+    transmission SNR per hour or per day, which is what to watch when tuning gain or changing
+    the antenna. Hours when the receiver was down are left out of the averages.
 - **Bookmarks.** While listening, name the moment and save it. Bookmarks have their own list on the
   recordings page, show as flags on the waveforms, and each has a link you can share. They are
   kept in a small SQLite file in `HUB_DATA_DIR`; there is no database server.
@@ -247,6 +249,7 @@ cached between builds.
 | `GET /api/recordings/...` | Days, recordings, waveforms, audio from an exact time, downloads ([handlers](internal/recordings/handlers.go)) |
 | `GET`/`POST /api/bookmarks`, `GET`/`PATCH`/`DELETE /api/bookmarks/{id}` | Bookmarks: list, add `{"name", "path", "offset"}`, get, rename `{"name"}`, delete ([handlers](internal/recordings/bookmarks.go)). Adding, renaming and deleting need a login. |
 | `GET /api/activity?days=30&tz=...`, `GET /api/activity/transmissions?date=...&tz=...` | The transmission history per frequency, day and hour (with receiver uptime), and one day's transmissions ([activity](internal/activity/activity.go)) |
+| `GET /api/activity/snr?view=day&date=...&tz=...`, `?view=month` | The median transmission SNR per frequency, per hour of a day or per day of the last 30 |
 | `GET /api/recordings/at?time=...` | The recording covering a moment, and the offset into it |
 | `POST /api/login`, `POST /api/logout` | Log in with `{"passphrase"}`, which sets a session cookie, or log out ([auth](internal/auth/auth.go)) |
 | `SOURCE`/`PUT /<mount>`, `GET /admin/metadata` | The Icecast source side, for rtl_airband |

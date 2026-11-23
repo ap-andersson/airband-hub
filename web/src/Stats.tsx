@@ -1,10 +1,13 @@
 // The Stats page: the last 30 days summed up per frequency (tiles, ranked boxes, the average
 // day), and transmissions or airtime per day over 7, 30 or 90 days with a day × hour heatmap.
 // Clicking a day opens it on the Activity page.
-import { useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { seconds, stationName } from "./format";
 import {
   dayFmt,
+  longDayFmt,
+  tz,
+  type Frequency,
   hh,
   Legend,
   localDate,
@@ -12,6 +15,7 @@ import {
   RANGES,
   seriesColor,
   stored,
+  today,
   Tooltip,
   upShare,
   useActivityData,
@@ -69,6 +73,7 @@ export function Stats({ enabled }: { enabled: boolean }) {
           <Summary data={data} />
           <AverageDay data={data} />
           <PerDay data={perDay.data} range={range} onRange={setRange} />
+          <MedianSNR />
         </>
       )}
     </main>
@@ -514,6 +519,188 @@ function DayChart({
         </svg>
       )}
       {tip}
+    </div>
+  );
+}
+
+// /api/activity/snr: the median SNR per frequency in each hour of a day or each day of a month
+interface SNRData {
+  slots: string[];
+  frequencies: Frequency[];
+  median: Record<string, (number | null)[]>;
+  count: Record<string, number[]>;
+}
+
+type SNRView = "day" | "month";
+
+function shiftDate(d: string, by: number): string {
+  const t = localDate(d);
+  t.setDate(t.getDate() + by);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+}
+
+// Median transmission SNR: a steady line means a steady receive chain, so a gain or antenna
+// change shows up as a step. Day: every hour of one day. Month: every day of the last 30.
+function MedianSNR() {
+  const [view, setView] = stored<SNRView>("hub.snrView", ["day", "month"], "month");
+  const [date, setDate] = useState(today());
+  const [only, setOnly] = useState<string | null>(null);
+  const [data, setData] = useState<SNRData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ctl = new AbortController();
+    const q = view === "day" ? `view=day&date=${date}` : "view=month";
+    fetch(`/api/activity/snr?${q}&tz=${encodeURIComponent(tz)}`, { signal: ctl.signal })
+      .then((r) => (r.ok ? r.json() : r.text().then((t) => Promise.reject(new Error(t.trim() || r.statusText)))))
+      .then((d: SNRData) => {
+        setData(d);
+        setError(null);
+      })
+      .catch((e) => !ctl.signal.aborted && setError(String(e.message ?? e)));
+    return () => ctl.abort();
+  }, [view, date]);
+
+  const isToday = date >= today();
+  return (
+    <section class="panel chart-panel" aria-labelledby="snr-title">
+      <div class="chart-head">
+        <h3 id="snr-title">{view === "day" ? `Median SNR per hour, ${longDayFmt.format(localDate(date))}` : "Median SNR per day, last 30 days"}</h3>
+        <div class="activity-controls">
+          {view === "day" && (
+            <div class="day-nav">
+              {!isToday && (
+                <button type="button" class="today" onClick={() => setDate(today())}>
+                  Today
+                </button>
+              )}
+              <button type="button" onClick={() => setDate(shiftDate(date, -1))} title="Previous day">
+                <span aria-hidden="true">‹</span>
+                <span class="visually-hidden">Previous day</span>
+              </button>
+              <button type="button" onClick={() => setDate(shiftDate(date, 1))} disabled={isToday} title="Next day">
+                <span aria-hidden="true">›</span>
+                <span class="visually-hidden">Next day</span>
+              </button>
+            </div>
+          )}
+          <div class="segmented" role="group" aria-label="Period">
+            <button type="button" aria-pressed={view === "day"} onClick={() => setView("day")}>
+              Day
+            </button>
+            <button type="button" aria-pressed={view === "month"} onClick={() => setView("month")}>
+              Month
+            </button>
+          </div>
+        </div>
+      </div>
+      {error && <p class="empty">Cannot read the SNR: {error}</p>}
+      {!data && !error && <p class="empty">Loading…</p>}
+      {data && (
+        <>
+          <Legend frequencies={data.frequencies} only={only} onOnly={setOnly} />
+          <SNRChart data={data} view={view} only={only} />
+          <p class="chart-note">
+            The middle transmission's peak SNR (3 dB steps). A point needs at least 3 transmissions; with fewer the line has a gap. A gain or antenna change
+            shows as a step.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+function SNRChart({ data, view, only }: { data: SNRData; view: SNRView; only: string | null }) {
+  const [ref, width] = useWidth();
+  const [hover, setHover] = useState<number | null>(null);
+  const H = 240;
+  const n = data.slots.length;
+  const m = { l: 40, r: 12, t: 10, b: 24 };
+  const iw = Math.max(1, width - m.l - m.r);
+  const ih = H - m.t - m.b;
+  const series = data.frequencies.map((f, i) => ({ f, color: seriesColor(i), values: data.median[f.freq], counts: data.count[f.freq] })).filter((s) => only === null || s.f.freq === only);
+  const all = series.flatMap((s) => s.values.filter((v): v is number => v !== null));
+  // the range the medians use, in 5 dB steps: differences matter here, not the distance from 0
+  const lo = all.length ? Math.floor((Math.min(...all) - 2) / 5) * 5 : 0;
+  const hi = all.length ? Math.ceil((Math.max(...all) + 2) / 5) * 5 : 50;
+  const step = hi - lo > 30 ? 10 : 5;
+  const x = (i: number) => m.l + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+  const y = (v: number) => m.t + ih - ((v - lo) / (hi - lo)) * ih;
+  const label = (i: number) => (view === "day" ? data.slots[i] : `${localDate(data.slots[i]).getDate()}/${localDate(data.slots[i]).getMonth() + 1}`);
+  const every = view === "day" ? 3 : Math.ceil(n / Math.max(1, Math.floor(iw / 56)));
+
+  // a line per run of known points; a lone point gets a dot
+  const runs = (values: (number | null)[]) => {
+    const out: { i: number; v: number }[][] = [];
+    values.forEach((v, i) => {
+      if (v === null) return;
+      const run = out.at(-1);
+      if (run && run.at(-1)!.i === i - 1) run.push({ i, v });
+      else out.push([{ i, v }]);
+    });
+    return out;
+  };
+
+  return (
+    <div class="chart" ref={ref} style={{ height: `${H}px` }}>
+      {width > 0 && (
+        <svg
+          width={width}
+          height={H}
+          role="img"
+          aria-label={view === "day" ? "Median SNR per hour, per frequency" : "Median SNR per day, per frequency"}
+          onMouseMove={(e) => {
+            const r = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+            const i = Math.round(((e.clientX - r.left - m.l) / iw) * (n - 1));
+            setHover(i >= 0 && i < n ? i : null);
+          }}
+          onMouseLeave={() => setHover(null)}
+        >
+          {Array.from({ length: Math.round((hi - lo) / step) + 1 }, (_, k) => lo + k * step).map((v) => (
+            <g key={v}>
+              <line class="grid" x1={m.l} x2={m.l + iw} y1={y(v)} y2={y(v)} />
+              <text class="axis" x={m.l - 6} y={y(v) + 4} text-anchor="end">
+                {v} dB
+              </text>
+            </g>
+          ))}
+          {data.slots.map((_, i) =>
+            (view === "day" ? i % every === 0 : (n - 1 - i) % every === 0) ? (
+              <text key={i} class="axis" x={x(i)} y={H - 6} text-anchor="middle">
+                {label(i)}
+              </text>
+            ) : null,
+          )}
+          {hover !== null && <line class="crosshair" x1={x(hover)} x2={x(hover)} y1={m.t} y2={m.t + ih} />}
+          {series.map((s) =>
+            runs(s.values).map((run, k) =>
+              run.length === 1 ? (
+                <circle key={`${s.f.freq}-${k}`} class="series-dot" cx={x(run[0].i)} cy={y(run[0].v)} r={3.5} style={{ fill: s.color }} />
+              ) : (
+                <polyline key={`${s.f.freq}-${k}`} class="series-line" points={run.map((p) => `${x(p.i)},${y(p.v)}`).join(" ")} style={{ stroke: s.color }} />
+              ),
+            ),
+          )}
+          {hover !== null &&
+            series.map((s) => (s.values[hover] === null ? null : <circle key={s.f.freq} class="series-dot" cx={x(hover)} cy={y(s.values[hover]!)} r={4} style={{ fill: s.color }} />))}
+        </svg>
+      )}
+      {hover !== null && (
+        <Tooltip x={x(hover)} y={m.t} width={width}>
+          <strong>{view === "day" ? `${data.slots[hover]}:00–${data.slots[hover]}:59` : dayFmt.format(localDate(data.slots[hover]))}</strong>
+          {series.map((s) => (
+            <span key={s.f.freq} class="tip-row">
+              <span class="swatch" style={{ background: s.color }} aria-hidden="true" />
+              {stationName(s.f.label, s.f.freq)}
+              <span class="tip-value">
+                {s.values[hover] === null ? "–" : `${s.values[hover]!.toFixed(1)} dB`}
+                <span class="tip-count"> ({s.counts[hover]})</span>
+              </span>
+            </span>
+          ))}
+          <span class="tip-note">(number of transmissions)</span>
+        </Tooltip>
+      )}
     </div>
   );
 }

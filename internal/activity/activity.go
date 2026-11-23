@@ -5,6 +5,7 @@ package activity
 import (
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -30,9 +31,12 @@ type Handlers struct {
 //
 //	GET /api/activity?days=30&tz=Europe/Stockholm               sums per frequency, day and hour
 //	GET /api/activity/transmissions?date=2026-11-20&tz=...      one day's transmissions, newest first
+//	GET /api/activity/snr?view=day&date=2026-11-20&tz=...       median SNR per frequency and hour
+//	GET /api/activity/snr?view=month&tz=...                     the same per day, last 30 days
 func (h *Handlers) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/activity", h.activity)
 	mux.HandleFunc("GET /api/activity/transmissions", h.transmissions)
+	mux.HandleFunc("GET /api/activity/snr", h.snr)
 }
 
 // Hours holds one value per hour of the day.
@@ -184,4 +188,117 @@ func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
 		out = zw
 	}
 	json.NewEncoder(out).Encode(v)
+}
+
+// MinSNRSamples is how many transmissions with a known SNR a point needs; fewer leave a gap.
+const MinSNRSamples = 3
+
+// SNR is the median peak SNR per frequency in each slot: hours of one day, or days of a month.
+type SNR struct {
+	Slots       []string              `json:"slots"` // "00".."23", or YYYY-MM-DD
+	Frequencies []store.Frequency     `json:"frequencies"`
+	Median      map[string][]*float64 `json:"median"` // null where there are too few transmissions
+	Count       map[string][]int      `json:"count"`  // transmissions with a known SNR
+}
+
+// snrOf is a transmission's SNR: the middle of the 3 dB band the hub knows it to. ok is false
+// when it is unknown (several transmissions ended within one scrape).
+func snrOf(t airband.Transmission) (float64, bool) {
+	if t.Approximate || (t.SNRMinDB == 0 && t.SNRMaxDB == 0) {
+		return 0, false
+	}
+	return (t.SNRMinDB + t.SNRMaxDB) / 2, true
+}
+
+func median(v []float64) float64 {
+	sort.Float64s(v)
+	n := len(v)
+	if n%2 == 1 {
+		return v[n/2]
+	}
+	return (v[n/2-1] + v[n/2]) / 2
+}
+
+// MedianSNR puts txs into the slots slot() picks (-1 for none) and takes the median per frequency.
+func MedianSNR(slots []string, freqs []store.Frequency, txs []airband.Transmission, slot func(time.Time) int) SNR {
+	out := SNR{Slots: slots, Frequencies: freqs, Median: map[string][]*float64{}, Count: map[string][]int{}}
+	samples := map[string][][]float64{}
+	for _, f := range freqs {
+		samples[f.Freq] = make([][]float64, len(slots))
+	}
+	for _, t := range txs {
+		v, ok := snrOf(t)
+		i := slot(t.Start)
+		if _, known := samples[t.Freq]; !ok || !known || i < 0 || i >= len(slots) {
+			continue
+		}
+		samples[t.Freq][i] = append(samples[t.Freq][i], v)
+	}
+	for _, f := range freqs {
+		med := make([]*float64, len(slots))
+		count := make([]int, len(slots))
+		for i, vs := range samples[f.Freq] {
+			count[i] = len(vs)
+			if len(vs) >= MinSNRSamples {
+				m := median(vs)
+				med[i] = &m
+			}
+		}
+		out.Median[f.Freq], out.Count[f.Freq] = med, count
+	}
+	return out
+}
+
+func (h *Handlers) snr(w http.ResponseWriter, r *http.Request) {
+	loc, ok := location(r)
+	if !ok {
+		http.Error(w, "unknown time zone", http.StatusBadRequest)
+		return
+	}
+	var from, to time.Time
+	var slots []string
+	var slot func(time.Time) int
+	switch r.URL.Query().Get("view") {
+	case "day":
+		day, err := time.ParseInLocation(time.DateOnly, r.URL.Query().Get("date"), loc)
+		if err != nil {
+			http.Error(w, "date must be YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+		from, to = day, day.AddDate(0, 0, 1)
+		for h := range 24 {
+			slots = append(slots, fmt.Sprintf("%02d", h))
+		}
+		slot = func(t time.Time) int { return t.In(loc).Hour() }
+	case "month":
+		const days = 30
+		from = midnight(time.Now(), loc).AddDate(0, 0, 1-days)
+		to = midnight(time.Now(), loc).AddDate(0, 0, 1)
+		index := map[string]int{}
+		for i := range days {
+			d := from.AddDate(0, 0, i).Format(time.DateOnly)
+			slots = append(slots, d)
+			index[d] = i
+		}
+		slot = func(t time.Time) int {
+			if i, ok := index[t.In(loc).Format(time.DateOnly)]; ok {
+				return i
+			}
+			return -1
+		}
+	default:
+		http.Error(w, "view must be day or month", http.StatusBadRequest)
+		return
+	}
+	freqs, err := h.Store.Frequencies(r.Context())
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	txs, err := h.Store.TransmissionsBetween(r.Context(), from, to)
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	writeJSON(w, r, MedianSNR(slots, freqs, txs, slot))
 }

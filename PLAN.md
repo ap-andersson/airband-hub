@@ -120,7 +120,8 @@ Prometheus ── scrapes airband /metrics directly
 - [x] Publish images: GitHub Actions builds both images for amd64 and arm64 on native runners and publishes them to ghcr. The fork's upstream workflows are kept but only run by hand. `deploy.sh` pulls the images, and `--build` still builds on the host.
 - [x] Store the transmission history in SQLite too (`hub.db`, D13): the last 36 hours, loaded back on start, so the dashboard's history survives restarts.
 - [x] **Activity page:** 90 days of transmissions and receiver uptime per hour in `hub.db` (a few MB). Average day per frequency, daily totals with a day × hour heatmap, and each day's list, playable from the recordings. Averages only count hours the receiver was up; hours before the history began count as no data.
-- [ ] Activity, next: median SNR per frequency per day (antenna and gain changes), first and last transmission of the day, weekday vs weekend, receiver health per hour.
+- [x] **Stats page:** the last 30 days per frequency (tiles, transmissions per day and average length), the average day, per-day totals with a heatmap, and the median transmission SNR per hour of a day or per day of a month, for judging gain and antenna changes. Activity keeps the day-by-day list.
+- [ ] Stats, maybe: weekday vs weekend. (Clipping and input power over time stay in VictoriaMetrics/Grafana.)
 - [ ] Offer the metrics endpoint upstream (now on the fork's main) as a pull request to RTLSDR-Airband.
 - [ ] Config editing (the end goal): edit `rtl_airband.conf`, starting with the scan list, in the hub. Back it up before writing, then restart (D12).
 - [x] Check the dashboard at phone width and in light mode.

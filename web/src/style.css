@@ -1851,6 +1851,10 @@ button.danger {
   font-variant-numeric: tabular-nums;
 }
 
+.tip-count {
+  color: var(--ink-3);
+}
+
 .tip-note,
 .chart-note {
   color: var(--ink-3);

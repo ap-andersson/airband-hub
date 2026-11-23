@@ -88,7 +88,17 @@ func TestEndpoints(t *testing.T) {
 	if len(day) != 2 || day[0].Freq != "118.805" {
 		t.Fatalf("day %+v", day)
 	}
-	for _, bad := range []string{"/api/activity?days=0", "/api/activity?days=91", "/api/activity?days=7&tz=Mars/Base", "/api/activity/transmissions?date=yesterday"} {
+	var month SNR
+	get(t, srv.URL+"/api/activity/snr?view=month&tz=UTC", &month)
+	if len(month.Slots) != 30 || len(month.Median["118.805"]) != 30 {
+		t.Fatalf("month %+v", month)
+	}
+	var hours SNR
+	get(t, srv.URL+"/api/activity/snr?view=day&date="+now.Format(time.DateOnly)+"&tz=UTC", &hours)
+	if len(hours.Slots) != 24 || hours.Slots[0] != "00" || len(hours.Count["135.855"]) != 24 {
+		t.Fatalf("day %+v", hours)
+	}
+	for _, bad := range []string{"/api/activity?days=0", "/api/activity?days=91", "/api/activity?days=7&tz=Mars/Base", "/api/activity/transmissions?date=yesterday", "/api/activity/snr?view=week", "/api/activity/snr?view=day&date=soon"} {
 		if resp, _ := http.Get(srv.URL + bad); resp.StatusCode != http.StatusBadRequest {
 			t.Errorf("%s: %d", bad, resp.StatusCode)
 		}
@@ -104,5 +114,34 @@ func get(t *testing.T, url string, v any) {
 	defer resp.Body.Close()
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMedianSNR(t *testing.T) {
+	freqs := []store.Frequency{{Freq: "118.805"}, {Freq: "129.800"}}
+	t0 := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	snrTx := func(at time.Time, freq string, lo, hi float64) airband.Transmission {
+		return airband.Transmission{Start: at, End: at.Add(time.Second), Freq: freq, SNRMinDB: lo, SNRMaxDB: hi}
+	}
+	txs := []airband.Transmission{
+		snrTx(t0, "118.805", 30, 33),                    // 31.5
+		snrTx(t0.Add(time.Minute), "118.805", 42, 45),   // 43.5
+		snrTx(t0.Add(2*time.Minute), "118.805", 36, 39), // 37.5
+		snrTx(t0.Add(3*time.Minute), "118.805", 45, 48), // 46.5: median of four is (37.5+43.5)/2
+		snrTx(t0.Add(4*time.Minute), "118.805", 0, 0),   // unknown, skipped
+		{Start: t0, Freq: "118.805", Approximate: true}, // unknown, skipped
+		snrTx(t0, "129.800", 30, 33),                    // only two: too few for a median
+		snrTx(t0.Add(time.Minute), "129.800", 30, 33),
+		snrTx(t0.Add(time.Hour), "118.805", 30, 33), // the next slot
+	}
+	got := MedianSNR([]string{"10", "11"}, freqs, txs, func(at time.Time) int { return at.Hour() - 10 })
+	if m := got.Median["118.805"][0]; m == nil || *m != 40.5 || got.Count["118.805"][0] != 4 {
+		t.Fatalf("118.805 hour 10: %v %v", m, got.Count["118.805"])
+	}
+	if got.Median["118.805"][1] != nil || got.Count["118.805"][1] != 1 {
+		t.Fatal("one transmission should leave a gap")
+	}
+	if got.Median["129.800"][0] != nil || got.Count["129.800"][0] != 2 {
+		t.Fatal("two transmissions should leave a gap")
 	}
 }
