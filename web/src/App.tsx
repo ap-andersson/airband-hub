@@ -4,7 +4,7 @@ import type { Frequency, Live, Mount, Receiver, Transmission } from "./api";
 import { ago, clock, seconds, snr, stationName } from "./format";
 import { LoginDialog, logout, useLoggedIn } from "./login";
 import { setTheme, useTheme, type ThemeChoice } from "./theme";
-import { PlayerBar, PlayerProvider, usePlayer } from "./player";
+import { PlayerBar, PlayerProvider, slowLiveExplanation, usePlayer } from "./player";
 import { Activity } from "./Activity";
 import { Stats } from "./Stats";
 import { Recordings } from "./Recordings";
@@ -235,6 +235,7 @@ function Board({ live }: { live: Live }) {
           ))}
         </ol>
       )}
+      <SlowLiveNote />
     </section>
   );
 }
@@ -511,5 +512,20 @@ function ThemeToggle() {
         </button>
       ))}
     </div>
+  );
+}
+
+// While live audio plays through the browser's own (slow) player, the strips run ahead of it.
+function SlowLiveNote() {
+  const { state } = usePlayer();
+  if (!state.live || state.live.lowLatency || (state.status !== "playing" && state.status !== "loading")) return null;
+  return (
+    <p class="latency-note" role="note">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.75" />
+        <path d="M8 7.2v4M8 4.8v.2" />
+      </svg>
+      {slowLiveExplanation(true)}
+    </p>
   );
 }

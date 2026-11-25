@@ -15,13 +15,26 @@ export const BOOKMARKS_CHANGED = "hub-bookmarks-changed";
 let decoderOk = false;
 liveDecoderSupported().then((ok) => (decoderOk = ok));
 
+/**
+ * Why live audio plays with a delay here: the browser lacks WebCodecs, which the low-delay
+ * player needs. strips: worded for the note under the Live page's frequency strips.
+ */
+export function slowLiveExplanation(strips = false): string {
+  const effect = strips
+    ? "the audio plays several seconds behind the receiver, so the strips above light up before you hear the transmission."
+    : "the audio plays several seconds behind the receiver, and behind the strips on the Live page.";
+  return `This browser can't run the low-delay live player (it needs WebCodecs, which for example Firefox on Android lacks), so ${effect}`;
+}
+
 export const at = (rec: Recording, t: number) => new Date(new Date(rec.start).getTime() + t * 1000);
 
 // loading: connecting or buffering; nothing is heard yet
 export type Status = "idle" | "loading" | "playing" | "paused" | "error";
 
 export interface PlayerState {
-  live: { mount: string } | null; // set while the live stream is the source
+  // set while the live stream is the source; lowLatency: decoded in the page (liveDecoder.ts),
+  // otherwise the browser's own player, seconds behind
+  live: { mount: string; lowLatency: boolean } | null;
   rec: Recording | null; // set while a recording is the source
   wave: Decoded | null;
   status: Status;
@@ -81,7 +94,7 @@ function usePlayerState() {
   const playLive = useCallback((mount: string) => {
     dropDecoder();
     setBehind(null);
-    const next: PlayerState = { ...IDLE, live: { mount }, status: "loading" };
+    const next: PlayerState = { ...IDLE, live: { mount, lowLatency: decoderOk }, status: "loading" };
     if (decoderOk) {
       // played through Web Audio; the audio element is not used
       const el = audio.current;
@@ -339,6 +352,8 @@ export function PlayerBar({ hint, bookmarksEnabled, mount }: { hint: string | nu
     let detail: string;
     if (state.status === "error") detail = state.error ?? "Playback failed";
     else if (loading) detail = behind === null ? "Connecting…" : "Buffering…";
+    // the browser's own player buffers more than it reports, so no number is better than a wrong one
+    else if (state.status === "playing" && !state.live.lowLatency) detail = "Higher delay";
     else if (state.status === "playing") detail = behind === null ? "Playing" : `${behind < 10 ? behind.toFixed(1) : Math.round(behind)} s behind the receiver`;
     else detail = "Stopped";
     return (
@@ -351,6 +366,7 @@ export function PlayerBar({ hint, bookmarksEnabled, mount }: { hint: string | nu
           </strong>
           <span class={state.status === "error" ? "secondary error" : "secondary"} role="status">
             {detail}
+            {!state.live.lowLatency && state.status !== "error" && <InfoButton text={slowLiveExplanation()} />}
           </span>
         </div>
         <Volume player={player} />
@@ -487,5 +503,33 @@ function AddBookmark({ rec, offset, onCancel, onSaved }: { rec: Recording; offse
       </button>
       {error && <p class="form-error">Not saved: {error}</p>}
     </form>
+  );
+}
+
+// An ⓘ that shows its text on click (and on hover), so it works on phones too.
+export function InfoButton({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    addEventListener("pointerdown", close);
+    return () => removeEventListener("pointerdown", close);
+  }, [open]);
+  return (
+    <span class="info" ref={ref}>
+      <button type="button" class="info-button" aria-expanded={open} title={text} onClick={() => setOpen(!open)}>
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.75" />
+          <path d="M8 7.2v4M8 4.8v.2" />
+        </svg>
+        <span class="visually-hidden">Why?</span>
+      </button>
+      {open && (
+        <span class="info-pop" role="note">
+          {text}
+        </span>
+      )}
+    </span>
   );
 }
