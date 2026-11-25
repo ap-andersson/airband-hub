@@ -149,6 +149,54 @@ code {
   margin-bottom: 1.3rem;
 }
 
+/* logo, title and the product name under it */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.logo {
+  flex: none;
+  width: 4.2rem;
+  height: auto;
+}
+
+.brand h1 {
+  font-size: 2.5rem;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.subtitle {
+  margin: 0.1rem 0 0;
+  color: var(--ink-3);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+.github {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--strip-edge);
+  border-radius: 999px;
+  background: var(--strip);
+  color: var(--ink-2);
+}
+
+.github:hover {
+  color: var(--ink);
+}
+
+.github svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
 .title-actions {
   display: flex;
   align-items: center;
@@ -808,6 +856,22 @@ td {
   .menubar {
     justify-content: center;
     border-radius: 1.25rem;
+  }
+
+  .brand {
+    gap: 0.6rem;
+  }
+
+  .brand h1 {
+    font-size: 1.55rem;
+  }
+
+  .logo {
+    width: 2.9rem;
+  }
+
+  .title-actions {
+    gap: 0.35rem;
   }
 
   /* four pages have to fit next to each other on a phone */

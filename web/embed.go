@@ -4,6 +4,7 @@ package web
 import (
 	"embed"
 	"io/fs"
+	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -11,6 +12,11 @@ import (
 
 //go:embed all:dist
 var dist embed.FS
+
+func init() {
+	// not in Go's built-in table, and distroless has no /etc/mime.types
+	mime.AddExtensionType(".webmanifest", "application/manifest+json")
+}
 
 // Handler serves the built UI. Unknown paths get index.html, so client-side routes work
 // on reload. Vite's hashed assets are cached for good; index.html never is.
