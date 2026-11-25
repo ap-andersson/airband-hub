@@ -1950,13 +1950,11 @@ button.danger {
   stroke-linecap: round;
 }
 
-/* the bar is at the bottom of the screen, so the explanation opens upwards */
+/* placed against the screen by InfoButton, above the ⓘ (the bar is at the bottom) */
 .info-pop {
-  position: absolute;
-  bottom: calc(100% + 0.5rem);
-  left: -1rem;
+  position: fixed;
   z-index: 20;
-  width: min(20rem, calc(100vw - 2rem));
+  white-space: normal;
   padding: 0.6rem 0.75rem;
   background: var(--page);
   border: 1px solid var(--strip-edge);

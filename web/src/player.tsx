@@ -506,19 +506,27 @@ function AddBookmark({ rec, offset, onCancel, onSaved }: { rec: Recording; offse
   );
 }
 
-// An ⓘ that shows its text on click (and on hover), so it works on phones too.
+// An ⓘ that shows its text on click (and on hover), so it works on phones too. The text is
+// placed against the screen, above the button and inside the edges, so a container that clips
+// (the player bar's status line does, on phones) cannot hide it.
 export function InfoButton({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<{ left: number; bottom: number; width: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
+  const toggle = () => {
+    if (open) return setOpen(null);
+    const r = ref.current!.getBoundingClientRect();
+    const width = Math.min(320, innerWidth - 16);
+    setOpen({ left: Math.max(8, Math.min(r.left - 16, innerWidth - width - 8)), bottom: innerHeight - r.top + 8, width });
+  };
   useEffect(() => {
     if (!open) return;
-    const close = (e: Event) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    const close = (e: Event) => ref.current && !ref.current.contains(e.target as Node) && setOpen(null);
     addEventListener("pointerdown", close);
     return () => removeEventListener("pointerdown", close);
   }, [open]);
   return (
     <span class="info" ref={ref}>
-      <button type="button" class="info-button" aria-expanded={open} title={text} onClick={() => setOpen(!open)}>
+      <button type="button" class="info-button" aria-expanded={open !== null} title={text} onClick={toggle}>
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="8" cy="8" r="6.75" />
           <path d="M8 7.2v4M8 4.8v.2" />
@@ -526,7 +534,7 @@ export function InfoButton({ text }: { text: string }) {
         <span class="visually-hidden">Why?</span>
       </button>
       {open && (
-        <span class="info-pop" role="note">
+        <span class="info-pop" role="note" style={{ left: `${open.left}px`, bottom: `${open.bottom}px`, width: `${open.width}px` }}>
           {text}
         </span>
       )}

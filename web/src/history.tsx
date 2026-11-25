@@ -123,7 +123,12 @@ export function Tooltip({ x, y, width, children }: { x: number; y: number; width
   const left = x > width - 200 ? undefined : x + 12;
   const right = x > width - 200 ? width - x + 12 : undefined;
   return (
-    <div class="chart-tip" role="status" style={{ left, right, top: Math.max(0, y - 10) }}>
+    // pixel strings: Preact does not add "px" to plain numbers
+    <div
+      class="chart-tip"
+      role="status"
+      style={{ left: left === undefined ? undefined : `${left}px`, right: right === undefined ? undefined : `${right}px`, top: `${Math.max(0, y - 10)}px` }}
+    >
       {children}
     </div>
   );
